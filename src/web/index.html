@@ -4,46 +4,175 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Skill Atlas</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M16 6l8 4.5v11L16 26l-8-4.5v-11z' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
-    header { padding: 1.5rem 2rem; border-bottom: 1px solid #8884; }
-    h1 { margin: 0 0 1rem; font-size: 1.4rem; }
-    form { display: flex; gap: .5rem; max-width: 48rem; }
-    input { flex: 1; padding: .6rem .8rem; font-size: 1rem; border: 1px solid #8888; border-radius: 6px; }
-    button { padding: .6rem 1.4rem; font-size: 1rem; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
-    button:disabled { opacity: .6; cursor: progress; }
-    main { flex: 1; padding: 1.5rem 2rem; }
-    #status { margin: 0 0 1rem; color: #888; }
-    #status.error { color: #dc2626; }
-    ul { list-style: none; padding: 0; margin: 0; }
-    li { padding: .8rem 0; border-bottom: 1px solid #8883; }
-    .name { font-weight: 600; }
-    .summary { margin: .2rem 0; }
-    .meta { font-size: .85rem; color: #888; }
-    .warnings { margin-top: 1rem; color: #b45309; font-size: .9rem; }
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7fb;
+      --surface: #ffffff;
+      --text: #16161d;
+      --muted: #62627a;
+      --border: #e3e3ee;
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --accent-soft: #eef0ff;
+      --danger: #b42318;
+      --danger-soft: #fef3f2;
+      --warn: #93370d;
+      --warn-soft: #fffaeb;
+      --chip: #f1f1f7;
+      --shadow: 0 1px 2px rgb(16 16 29 / 0.04), 0 4px 16px rgb(16 16 29 / 0.05);
+      --radius: 12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e14;
+        --surface: #17171f;
+        --text: #ececf3;
+        --muted: #9a9ab0;
+        --border: #2a2a37;
+        --accent: #818cf8;
+        --accent-hover: #a5b4fc;
+        --accent-soft: #1f1f3a;
+        --danger: #fda29b;
+        --danger-soft: #2d1414;
+        --warn: #fec84b;
+        --warn-soft: #2a2110;
+        --chip: #22222d;
+        --shadow: none;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    .wrap { width: 100%; max-width: 54rem; margin: 0 auto; padding: 0 1.25rem; }
+    a { color: inherit; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* The top: the title and the search */
+    header { padding: 3.5rem 0 2rem; }
+    .brand { display: flex; align-items: center; gap: .75rem; margin-bottom: .4rem; }
+    .brand svg { flex: none; }
+    h1 { margin: 0; font-size: 1.75rem; letter-spacing: -0.02em; }
+    .tagline { margin: 0 0 1.75rem; color: var(--muted); }
+    form { display: flex; gap: .6rem; }
+    .field { position: relative; flex: 1; }
+    .field svg { position: absolute; left: .9rem; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+    input {
+      width: 100%; height: 3rem; padding: 0 1rem 0 2.75rem; font: inherit; color: inherit;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    input::placeholder { color: var(--muted); }
+    input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+    input::-webkit-search-cancel-button { cursor: pointer; }
+    button[type="submit"] {
+      display: inline-flex; align-items: center; justify-content: center; gap: .5rem; height: 3rem; min-width: 7rem; padding: 0 1.4rem;
+      font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: var(--radius); cursor: pointer;
+      transition: background .15s, transform .05s;
+    }
+    @media (prefers-color-scheme: dark) { button[type="submit"] { color: #0e0e14; } }
+    button[type="submit"]:hover { background: var(--accent-hover); }
+    button[type="submit"]:active { transform: translateY(1px); }
+    button[type="submit"]:disabled { cursor: progress; opacity: .75; }
+    .spinner { display: none; width: 1rem; height: 1rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+    button:disabled .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .examples { margin: .9rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .875rem; color: var(--muted); }
+    .examples button {
+      font: inherit; font-family: var(--mono); font-size: .8rem; color: var(--text); background: var(--surface);
+      border: 1px solid var(--border); border-radius: 999px; padding: .2rem .7rem; cursor: pointer; transition: border-color .15s, color .15s;
+    }
+    .examples button:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* The bottom: the results */
+    main.wrap { padding-bottom: 3rem; }
+    .results-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; padding: 1rem 0 .9rem; border-top: 1px solid var(--border); }
+    #status { margin: 0; font-weight: 600; font-size: 1.05rem; }
+    #status.idle { font-weight: 400; color: var(--muted); }
+    #status a { text-decoration: none; }
+    #status a:hover { text-decoration: underline; }
+    #status .count { color: var(--muted); font-weight: 500; }
+    #status.error { font-weight: 500; color: var(--danger); background: var(--danger-soft); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: var(--radius); padding: .75rem 1rem; width: 100%; }
+    #commit { font-family: var(--mono); font-size: .8rem; color: var(--muted); }
+    #commit a { text-decoration: none; }
+    #commit a:hover { color: var(--accent); }
+    ul { list-style: none; margin: 0; padding: 0; }
+    #skills { display: grid; gap: .65rem; }
+    .skill {
+      padding: 1rem 1.15rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+      transition: border-color .15s, transform .15s;
+    }
+    .skill:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+    .skill .name { font-weight: 650; font-size: 1.02rem; color: var(--accent); text-decoration: none; }
+    .skill .name:hover { text-decoration: underline; }
+    .skill .name::after { content: " ↗"; font-weight: 400; font-size: .85em; opacity: .6; }
+    .summary { margin: .3rem 0 .55rem; }
+    .meta { margin-top: .3rem; font-size: .8rem; color: var(--muted); }
+    code { font-family: var(--mono); font-size: .78rem; background: var(--chip); border-radius: 6px; padding: .12rem .42rem; overflow-wrap: anywhere; }
+    .empty { padding: 2.5rem 1rem; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }
+    .skeleton { height: 5.5rem; border-radius: var(--radius); background: linear-gradient(90deg, var(--chip) 25%, var(--surface) 50%, var(--chip) 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+    @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    #loading { display: grid; gap: .65rem; }
+    #warnings-box { margin-top: 1.25rem; color: var(--warn); background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent); border-radius: var(--radius); padding: .7rem 1rem; font-size: .875rem; }
+    #warnings-box summary { cursor: pointer; font-weight: 600; }
+    #warnings { margin-top: .5rem; display: grid; gap: .35rem; }
+    #warnings li { overflow-wrap: anywhere; }
+    footer { padding: 1.5rem 0 2.5rem; color: var(--muted); font-size: .8rem; text-align: center; }
+    @media (max-width: 34rem) {
+      header { padding-top: 2rem; }
+      form { flex-direction: column; }
+      button[type="submit"] { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   </style>
 </head>
 <body>
   <header>
-    <h1>Skill Atlas</h1>
-    <form id="scan-form">
-      <input id="repo" name="repo" type="search" placeholder="GitHub repository, e.g. JetBrains/kotlin" aria-label="Repository" required autofocus>
-      <button id="scan" type="submit">Scan</button>
-    </form>
+    <div class="wrap">
+      <div class="brand">
+        <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#4f46e5"/><path d="M16 6l8 4.5v11L16 26l-8-4.5v-11z" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/><path d="M8 10.5l8 4.5 8-4.5M16 15v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" opacity=".55"/></svg>
+        <h1>Skill Atlas</h1>
+      </div>
+      <p class="tagline">Every agent skill in a GitHub repository, with a link to its <code>SKILL.md</code>.</p>
+      <form id="scan-form" role="search">
+        <label class="field">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          <input id="repo" name="repo" type="search" placeholder="owner/repo or https://github.com/owner/repo" aria-label="GitHub repository" autocomplete="off" spellcheck="false" required autofocus>
+        </label>
+        <button id="scan" type="submit"><span class="spinner" aria-hidden="true"></span><span>Scan</span></button>
+      </form>
+      <p class="examples"><span>Try</span><button type="button" data-repo="JetBrains/kotlin">JetBrains/kotlin</button><button type="button" data-repo="JetBrains/MPS">JetBrains/MPS</button><button type="button" data-repo="JetBrains/koog">JetBrains/koog</button></p>
+    </div>
   </header>
-  <main id="results" aria-live="polite">
-    <p id="status">Enter a repository and press Scan.</p>
+  <main id="results" class="wrap" aria-live="polite">
+    <div class="results-head">
+      <p id="status" class="idle">Enter a repository and press Scan.</p>
+      <span id="commit"></span>
+    </div>
+    <div id="loading" hidden><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
     <ul id="skills"></ul>
-    <ul id="warnings" class="warnings"></ul>
+    <details id="warnings-box" hidden>
+      <summary id="warnings-title"></summary>
+      <ul id="warnings"></ul>
+    </details>
   </main>
+  <footer class="wrap">Read live from GitHub; nothing is stored.</footer>
   <script>
-    const form = document.getElementById('scan-form');
-    const input = document.getElementById('repo');
-    const button = document.getElementById('scan');
-    const status = document.getElementById('status');
-    const skillList = document.getElementById('skills');
-    const warningList = document.getElementById('warnings');
+    const $ = (id) => document.getElementById(id);
+    const form = $('scan-form');
+    const input = $('repo');
+    const button = $('scan');
+    const status = $('status');
+    const commit = $('commit');
+    const loading = $('loading');
+    const skillList = $('skills');
+    const warningBox = $('warnings-box');
+    const warningTitle = $('warnings-title');
+    const warningList = $('warnings');
+    let current = 0; // only the latest scan's answer is shown
 
     function element(tag, className, text) {
       const node = document.createElement(tag);
@@ -52,44 +181,112 @@
       return node;
     }
 
-    function show(message, isError) {
-      status.textContent = message;
-      status.className = isError ? 'error' : '';
+    function externalLink(href, className, text) {
+      const link = element('a', className, text);
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      return link;
     }
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const repo = input.value.trim();
-      if (!repo) return;
+    function reset() {
       skillList.replaceChildren();
       warningList.replaceChildren();
+      warningBox.hidden = true;
+      commit.replaceChildren();
+    }
+
+    function showError(message) {
+      status.className = 'error';
+      status.replaceChildren(message);
+    }
+
+    /** `owner/repo · N skills`, the repository linked. */
+    function showRepository(repository, count) {
+      status.className = '';
+      status.replaceChildren(
+        externalLink(repository.url, '', repository.id),
+        element('span', 'count', ` · ${count} ${count === 1 ? 'skill' : 'skills'}`),
+      );
+      if (repository.commit) {
+        commit.replaceChildren(externalLink(`${repository.url}/tree/${repository.commit}`, '', `@ ${repository.commit.slice(0, 7)}`));
+        commit.title = `Scanned commit ${repository.commit}`;
+      }
+    }
+
+    function skillItem(skill) {
+      const item = element('li', 'skill');
+      item.append(externalLink(skill.link, 'name', skill.name));
+      if (skill.summary) {
+        const summary = element('p', 'summary', skill.summary);
+        if (skill.description !== skill.summary) summary.title = skill.description;
+        item.append(summary);
+      }
+      const path = element('div', 'meta');
+      path.append(element('code', '', skill.path));
+      item.append(path);
+      if (skill.copies.length) {
+        const copies = element('div', 'meta', 'also in ');
+        skill.copies.forEach((copy, index) => {
+          if (index) copies.append(', ');
+          copies.append(element('code', '', copy));
+        });
+        item.append(copies);
+      }
+      return item;
+    }
+
+    async function scan(repo) {
+      const id = ++current;
+      reset();
       button.disabled = true;
-      show(`Scanning ${repo}…`, false);
+      loading.hidden = false;
+      status.className = 'idle';
+      status.replaceChildren(`Scanning ${repo}…`);
+      history.replaceState(null, '', `?repo=${encodeURIComponent(repo)}`);
       try {
         const response = await fetch(`/api/scan?repo=${encodeURIComponent(repo)}`);
         const answer = await response.json();
-        if (!response.ok) return show(answer.error, true);
-        const count = answer.skills.length;
-        show(`${answer.repository.id} · ${count} ${count === 1 ? 'skill' : 'skills'}`, false);
-        for (const skill of answer.skills) {
-          const item = element('li');
-          const link = element('a', 'name', skill.name);
-          link.href = skill.link;
-          link.target = '_blank';
-          link.rel = 'noopener';
-          item.append(link);
-          if (skill.summary) item.append(element('p', 'summary', skill.summary));
-          item.append(element('div', 'meta', skill.path));
-          if (skill.copies.length) item.append(element('div', 'meta', `also in ${skill.copies.join(', ')}`));
-          skillList.append(item);
+        if (id !== current) return;
+        if (!response.ok) return showError(answer.error);
+        showRepository(answer.repository, answer.skills.length);
+        if (answer.skills.length === 0) skillList.append(element('li', 'empty', 'No skills in this repository.'));
+        for (const skill of answer.skills) skillList.append(skillItem(skill));
+        if (answer.warnings.length) {
+          warningTitle.textContent = `${answer.warnings.length} ${answer.warnings.length === 1 ? 'warning' : 'warnings'}`;
+          for (const warning of answer.warnings) warningList.append(element('li', '', `warning: ${warning}`));
+          warningBox.hidden = false;
         }
-        for (const warning of answer.warnings) warningList.append(element('li', '', `warning: ${warning}`));
       } catch (error) {
-        show(`Cannot reach the server: ${error.message}`, true);
+        if (id === current) showError(`Cannot reach the server: ${error.message}`);
       } finally {
-        button.disabled = false;
+        if (id === current) {
+          button.disabled = false;
+          loading.hidden = true;
+        }
       }
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const repo = input.value.trim();
+      if (repo && !button.disabled) scan(repo);
     });
+
+    for (const example of document.querySelectorAll('.examples button')) {
+      example.addEventListener('click', () => {
+        if (button.disabled) return;
+        input.value = example.dataset.repo;
+        scan(example.dataset.repo);
+      });
+    }
+
+    // A shared link, `/?repo=owner/repo`, scans at once.
+    const shared = new URLSearchParams(location.search).get('repo');
+    if (shared) {
+      input.value = shared;
+      scan(shared);
+    }
   </script>
 </body>
 </html>
