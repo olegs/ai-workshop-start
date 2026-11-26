@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skill Atlas</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
+    header { padding: 1.5rem 2rem; border-bottom: 1px solid #8884; }
+    h1 { margin: 0 0 1rem; font-size: 1.4rem; }
+    form { display: flex; gap: .5rem; max-width: 48rem; }
+    input { flex: 1; padding: .6rem .8rem; font-size: 1rem; border: 1px solid #8888; border-radius: 6px; }
+    button { padding: .6rem 1.4rem; font-size: 1rem; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: progress; }
+    main { flex: 1; padding: 1.5rem 2rem; }
+    #status { margin: 0 0 1rem; color: #888; }
+    #status.error { color: #dc2626; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: .8rem 0; border-bottom: 1px solid #8883; }
+    .name { font-weight: 600; }
+    .summary { margin: .2rem 0; }
+    .meta { font-size: .85rem; color: #888; }
+    .warnings { margin-top: 1rem; color: #b45309; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Skill Atlas</h1>
+    <form id="scan-form">
+      <input id="repo" name="repo" type="search" placeholder="GitHub repository, e.g. JetBrains/kotlin" aria-label="Repository" required autofocus>
+      <button id="scan" type="submit">Scan</button>
+    </form>
+  </header>
+  <main id="results" aria-live="polite">
+    <p id="status">Enter a repository and press Scan.</p>
+    <ul id="skills"></ul>
+    <ul id="warnings" class="warnings"></ul>
+  </main>
+  <script>
+    const form = document.getElementById('scan-form');
+    const input = document.getElementById('repo');
+    const button = document.getElementById('scan');
+    const status = document.getElementById('status');
+    const skillList = document.getElementById('skills');
+    const warningList = document.getElementById('warnings');
+
+    function element(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function show(message, isError) {
+      status.textContent = message;
+      status.className = isError ? 'error' : '';
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const repo = input.value.trim();
+      if (!repo) return;
+      skillList.replaceChildren();
+      warningList.replaceChildren();
+      button.disabled = true;
+      show(`Scanning ${repo}…`, false);
+      try {
+        const response = await fetch(`/api/scan?repo=${encodeURIComponent(repo)}`);
+        const answer = await response.json();
+        if (!response.ok) return show(answer.error, true);
+        const count = answer.skills.length;
+        show(`${answer.repository.id} · ${count} ${count === 1 ? 'skill' : 'skills'}`, false);
+        for (const skill of answer.skills) {
+          const item = element('li');
+          const link = element('a', 'name', skill.name);
+          link.href = skill.link;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          item.append(link);
+          if (skill.summary) item.append(element('p', 'summary', skill.summary));
+          item.append(element('div', 'meta', skill.path));
+          if (skill.copies.length) item.append(element('div', 'meta', `also in ${skill.copies.join(', ')}`));
+          skillList.append(item);
+        }
+        for (const warning of answer.warnings) warningList.append(element('li', '', `warning: ${warning}`));
+      } catch (error) {
+        show(`Cannot reach the server: ${error.message}`, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
