@@ -19,7 +19,7 @@ test('an organization is github.com/<owner>, with or without the scheme or a sla
   assert.equal(parseGitHubUrl('https://github.com/JetBrains'), undefined);
 });
 
-test('scan <organization>: the count, then each repository by name with its skills; one that fails is a warning', async () => {
+test('scan <organization>: the count, then each repository with skills by name; one that fails is a warning', async () => {
   const { code, stdout, stderr } = await atlas(['scan', 'https://github.com/acme']);
   assert.equal(code, 0, stderr);
   assert.equal(
@@ -37,12 +37,7 @@ test('scan <organization>: the count, then each repository by name with its skil
       'Acme/big · 1 skill',
       'release — Release a module.',
       `  ${link('Acme/big', 'modules/x/.claude/skills/release/SKILL.md')}`,
-      '',
-      // docs/SKILL.md is not a project skill.
-      'Acme/docs · 0 skills',
-      '',
-      // No commits yet: no skills, not an error.
-      'Acme/empty · 0 skills',
+      // Not shown, no skills: Acme/docs (docs/SKILL.md is not a project skill) and Acme/empty (no commits yet).
     ].join('\n'),
   );
   assert.equal(stderr, 'warning: Acme/broken: GitHub answered 500 for https://api.github.com/repos/Acme/broken/commits/main: Server Error; skipped');
@@ -72,10 +67,15 @@ test("scan <organization>: each repository is printed as soon as it is scanned, 
     'scan Acme/broken',
     'error Acme/broken:',
     'scan Acme/docs',
-    'print Acme/docs',
     'scan Acme/empty',
-    'print Acme/empty',
   ]);
+});
+
+test('scan <organization>: a repository with no skills is not shown, its warnings are; none with skills → only the count', async () => {
+  const { code, stdout, stderr } = await atlas(['scan', 'https://github.com/Bare']);
+  assert.equal(code, 0, stderr);
+  assert.equal(stdout, 'Bare · 2 repositories');
+  assert.equal(stderr, 'warning: Bare/gone: .claude/skills/gone/SKILL.md: listed, but not found at the scanned commit; skipped');
 });
 
 test("a user's repositories, like an organization's", async () => {

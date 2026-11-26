@@ -46,7 +46,10 @@ async function scanCommand(args: string[], context: Context) {
   for (const warning of result.warnings) context.error(`warning: ${warning}`);
 }
 
-/** `<organization> · N repositories`, then each repository as soon as it is scanned. */
+/**
+ * `<organization> · N repositories`, then each repository with skills as soon as it is scanned;
+ * a repository with no skills is not shown, its warnings are.
+ */
 async function scanOrganizationCommand(organization: Organization, context: Context) {
   const count = organization.repositories.length;
   context.print(`${organization.id} · ${count} ${count === 1 ? 'repository' : 'repositories'}`);
@@ -55,8 +58,10 @@ async function scanOrganizationCommand(organization: Organization, context: Cont
       context.error(`warning: ${repository.id}: ${error}; skipped`);
       continue;
     }
-    context.print('');
-    printRepository(result.repository, result.skills, context);
+    if (result.skills.length > 0) {
+      context.print('');
+      printRepository(result.repository, result.skills, context);
+    }
     for (const warning of result.warnings) context.error(`warning: ${repository.id}: ${warning}`);
   }
 }

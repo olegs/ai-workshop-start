@@ -400,7 +400,7 @@ const sections = (document: Document) =>
     ...[...section.querySelectorAll('.skill .name, .problem')].map((node) => node.textContent),
   ]);
 
-test('in the page: an organization → each repository with its skills, the counts above, failures as warnings', async () => {
+test('in the page: an organization → each repository with skills, the counts above, failures as warnings', async () => {
   const page = await openPage();
   try {
     const { document } = page;
@@ -411,8 +411,7 @@ test('in the page: an organization → each repository with its skills, the coun
       ['Acme/app · 2 skills', 'deploy', 'lint'],
       ['Acme/big · 1 skill', 'release'],
       ['Acme/broken', 'GitHub answered 500 for https://api.github.com/repos/Acme/broken/commits/main: Server Error'],
-      ['Acme/docs · 0 skills'],
-      ['Acme/empty · 0 skills'],
+      // Not shown, no skills: Acme/docs and Acme/empty.
     ]);
     const first = document.querySelector('#repositories .repository')!;
     assert.equal((first.querySelector('.skill .name') as HTMLAnchorElement).href, acmeLink('Acme/app', '.claude/skills/deploy/SKILL.md'));
@@ -460,7 +459,9 @@ test('in the page: repositories appear one by one, placeholders below them until
     assert.equal((document.getElementById('scan') as HTMLButtonElement).disabled, true);
     release();
     await scanning;
-    assert.equal(document.querySelectorAll('#repositories .repository').length, 5);
+    // Acme/docs and Acme/empty, no skills, are not shown.
+    assert.equal(document.querySelectorAll('#repositories .repository').length, 3);
+    assert.equal(document.getElementById('status')!.textContent, 'Acme · 5 repositories · 3 skills');
     assert.equal(window.getComputedStyle(loading).display, 'none');
     assert.equal(document.getElementById('commit')!.textContent, '');
   } finally {
@@ -468,6 +469,35 @@ test('in the page: repositories appear one by one, placeholders below them until
     page.close();
     slowServer.close();
   }
+});
+
+test('in the page: repositories with no skills are not shown, their warnings are; none with skills → a note', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('Bare');
+    assert.equal(document.getElementById('status')!.textContent, 'Bare · 2 repositories · 0 skills');
+    assert.equal(document.getElementById('commit')!.textContent, '');
+    assert.deepEqual(sections(document), []);
+    assert.equal(document.querySelector('#repositories .empty')!.textContent, 'No skills in these repositories.');
+    assert.deepEqual(
+      [...document.querySelectorAll('#warnings li')].map((item) => item.textContent),
+      ['warning: Bare/gone: .claude/skills/gone/SKILL.md: listed, but not found at the scanned commit; skipped'],
+    );
+  } finally {
+    page.close();
+  }
+});
+
+test('the API still streams a line for each repository with no skills', async () => {
+  const answer = await lines('Bare');
+  assert.deepEqual(
+    answer.lines.slice(1).map((line) => [line.repository.id, line.skills, line.warnings.length]),
+    [
+      ['Bare/gone', [], 1],
+      ['Bare/plain', [], 0],
+    ],
+  );
 });
 
 test('in the page: a rate limit stops the scan, what was scanned stays, the reason in the warnings', async () => {
