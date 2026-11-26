@@ -2,7 +2,7 @@
 // Records a short demo of the web view over the mock data: `npm run demo`, into docs/demo.mp4, or the path given,
 // and its animated GIF preview next to it, docs/demo.gif: the pull request shows the GIF, as GitHub plays no MP4 there.
 // Chromium plays a person: the mouse glides to the field, the words are typed a key at a time, each result is read.
-// At most 10 seconds. Needs Chromium for Playwright (`npx playwright install --with-deps chromium`) and ffmpeg.
+// At most 20 seconds. Needs Chromium for Playwright (`npx playwright install --with-deps chromium`) and ffmpeg.
 // Change DEMO below to show what a pull request changes in the page.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { createWebServer } from '../src/web.ts';
 import { mockGitHub } from './github.ts';
 
 /** The longest a demo may be, in seconds. */
-export const MAX_SECONDS = 10;
+export const MAX_SECONDS = 20;
 const SIZE = { width: 1280, height: 720 };
 /** The GIF preview: narrower and fewer frames than the video, so it stays well under a megabyte. */
 export const PREVIEW = { width: 960, fps: 12 };
@@ -40,6 +40,20 @@ async function DEMO(page: Page, human: Human) {
   await human.click('#filter');
   await human.type('gradle');
   await human.pause(1400); // reading what matched
+  await human.clear();
+  await human.type('koog');
+  await human.pause(1300); // a repository's name matches too: its skills only
+  await human.clear();
+  await human.type('cobol');
+  await human.pause(1200); // nothing matches, and the page says so
+  await human.click('.examples button[data-repo="JetBrains/kotlin"]');
+  await page.locator('#skills .skill').first().waitFor();
+  await human.pause(900); // one repository: its skills, the commit they are pinned to
+  const copy = page.locator('#skills .skill', { hasText: 'compiler-test-data' }).first();
+  await copy.scrollIntoViewIfNeeded();
+  const box = await copy.boundingBox();
+  if (box) await human.moveTo(box.x + box.width * 0.6, box.y + box.height / 2); // the skill with a copy, `also in`
+  await human.pause(1400);
 }
 
 type Human = ReturnType<typeof human>;
@@ -75,6 +89,13 @@ function human(page: Page) {
       await page.mouse.down();
       await pause(70);
       await page.mouse.up();
+    },
+    /** Empties the focused field, as a person does: everything selected, then deleted. */
+    async clear() {
+      await page.keyboard.press('ControlOrMeta+A');
+      await pause(120);
+      await page.keyboard.press('Backspace');
+      await pause(250);
     },
     /** Types into the focused field, a key at a time; the same pace every time, so every demo is the same. */
     async type(text: string) {

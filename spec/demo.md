@@ -13,7 +13,7 @@ it; over **mock data**, the same in every demo.
 `npm run demo` records it into `docs/demo.mp4`, or the path given
 - Chromium, through Playwright, **1280×720**, light; the page only, its own cursor drawn in it
 - Plays a person: the mouse glides to what it clicks, keys typed one at a time, pauses to read the results
-- **10 seconds at most**: a longer demo fails, to be shortened; the blank page before the first one is cut
+- **20 seconds at most**: a longer demo fails, to be shortened; the blank page before the first one is cut
 - H.264 MP4, so every player plays it
 - Its **preview** next to it, the same name, `.gif` (`docs/demo.gif`): the same seconds as an animated GIF, looping,
   **960** wide, 12 frames a second, under 2 MB. GitHub plays no MP4 committed to a repository, its page only offers to

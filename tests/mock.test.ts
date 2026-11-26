@@ -84,7 +84,7 @@ const ffmpeg = (() => {
 const { chromium } = await import('playwright');
 const reason = !ffmpeg ? 'no ffmpeg' : !existsSync(chromium.executablePath()) ? 'no Chromium for Playwright' : false;
 
-test('demo: an MP4 of at most 10 seconds, H.264, from the page over the mock data, and its GIF preview', { skip: reason, timeout: 120_000 }, async () => {
+test('demo: an MP4 of at most 20 seconds, H.264, from the page over the mock data, and its GIF preview', { skip: reason, timeout: 120_000 }, async () => {
   const { recordDemo, previewPath, MAX_SECONDS, PREVIEW } = await import('../mock/demo.ts');
   const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-demo-test-'));
   try {

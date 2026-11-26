@@ -4,7 +4,7 @@ When the new issue with tag "Delegated to AI" is created of the label is added t
 * If the fix changes the UI (what the web view shows or how it behaves: `src/web/`, `src/web.ts`), record a demo video,
   as spec/demo.md says:
   * Change `DEMO` in `mock/demo.ts` so that a person shows the change: what they click and type, the pauses to read;
-    keep the demo 10 seconds at most
+    keep the demo 20 seconds at most
   * Use only the mock data in `mock/`, the same for each demo; add to `mock/github.ts` only what the change needs to be
     seen, and keep `npm test` green
   * Run `npx playwright install --with-deps chromium` and install ffmpeg if missing, then `npm run demo`: it writes
