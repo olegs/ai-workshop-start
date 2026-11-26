@@ -19,16 +19,19 @@ const SIZE = { width: 1280, height: 720 };
 
 /** What a person does on the page; `human` moves, clicks and types like one. */
 async function DEMO(page: Page, human: Human) {
-  await human.pause(600);
+  await human.pause(1000); // taking in the sunset at the top
   await human.click('#repo');
-  await human.type('JetBrains/kotlin');
-  await human.pause(300);
+  await human.type('JetBrains');
+  await human.pause(250);
   await human.click('#scan');
-  await page.locator('#skills .skill').first().waitFor();
-  await human.pause(1500); // reading the skills
+  await page.locator('#repositories .skill').first().waitFor();
+  await human.pause(700); // the repositories, their names in slanted capitals
+  const card = await page.locator('#repositories .skill').first().boundingBox();
+  if (card) await human.moveTo(card.x + card.width * 0.6, card.y + card.height / 2); // a card glows under the mouse
+  await human.pause(800);
   await human.click('#filter');
   await human.type('gradle');
-  await human.pause(1800); // reading what matched
+  await human.pause(1400); // reading what matched
 }
 
 type Human = ReturnType<typeof human>;
