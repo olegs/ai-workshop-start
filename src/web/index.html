@@ -99,6 +99,10 @@
     #commit { font-family: var(--mono); font-size: .8rem; color: var(--muted); }
     #commit a { text-decoration: none; }
     #commit a:hover { color: var(--accent); }
+    /* The filter: narrows the results shown, by a skill's name or description, or its repository */
+    .filter { position: relative; display: block; margin-bottom: .9rem; }
+    .filter input { height: 2.5rem; font-size: .925rem; }
+    #filter-note { margin: 0 0 .9rem; font-size: .875rem; color: var(--muted); }
     ul { list-style: none; margin: 0; padding: 0; }
     #skills { display: grid; gap: .65rem; }
     .skill {
@@ -165,6 +169,11 @@
       <p id="status" class="idle">Enter a repository or an organization and press Scan.</p>
       <span id="commit"></span>
     </div>
+    <label class="field filter" id="filter-box" hidden>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 011.75 2h12.5a.75.75 0 01.53 1.28L10 8.06v4.69a.75.75 0 01-.33.62l-2.5 1.67A.75.75 0 016 14.42V8.06L1.22 3.28A.75.75 0 011 2.75z"/></svg>
+      <input id="filter" type="search" placeholder="Filter by name, description, or repository" aria-label="Filter skills by name, description, or repository" autocomplete="off" spellcheck="false">
+    </label>
+    <p id="filter-note" hidden></p>
     <ul id="skills"></ul>
     <div id="repositories"></div>
     <div id="loading" hidden><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
@@ -187,6 +196,9 @@
     const warningBox = $('warnings-box');
     const warningTitle = $('warnings-title');
     const warningList = $('warnings');
+    const filterBox = $('filter-box');
+    const filterInput = $('filter');
+    const filterNote = $('filter-note');
     let current = 0; // only the latest scan's answer is shown
 
     function element(tag, className, text) {
@@ -212,6 +224,34 @@
       commit.replaceChildren();
       commit.removeAttribute('title');
       warningBox.open = false;
+      filterInput.value = '';
+      applyFilter();
+    }
+
+    /** The words of the filter, each must be in the skill's name, its description, or its repository's name. */
+    const filterWords = () => filterInput.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = (text, words) => words.every((word) => text.includes(word));
+
+    /** Shows only the skills that match the filter; a repository section only with a match. */
+    function applyFilter() {
+      const words = filterWords();
+      const skills = [...document.querySelectorAll('#results .skill')];
+      let shown = 0;
+      for (const skill of skills) {
+        skill.hidden = !matches(skill.dataset.search, words);
+        if (!skill.hidden) shown++;
+      }
+      for (const section of repositoryList.querySelectorAll('.repository')) {
+        // A repository that could not be scanned: shown while its name matches.
+        section.hidden = section.dataset.error === undefined
+          ? !section.querySelector('.skill:not([hidden])')
+          : !matches(section.dataset.search, words);
+      }
+      filterBox.hidden = skills.length === 0;
+      filterNote.hidden = words.length === 0 || skills.length === 0;
+      filterNote.textContent = shown === 0
+        ? `No skills match “${filterInput.value.trim()}”.`
+        : `${shown} of ${plural(skills.length, 'skill', 'skills')} match`;
     }
 
     function showError(message) {
@@ -232,8 +272,9 @@
       }
     }
 
-    function skillItem(skill) {
+    function skillItem(skill, repository) {
       const item = element('li', 'skill');
+      item.dataset.search = [skill.name, skill.description, repository.id].join('\n').toLowerCase();
       item.append(externalLink(skill.link, 'name', skill.name));
       if (skill.summary) {
         const summary = element('p', 'summary', skill.summary);
@@ -266,6 +307,8 @@
     /** One repository of an organization: its name, its skill count and commit, then its skills or why it was not scanned. */
     function repositorySection(line) {
       const section = element('section', 'repository');
+      section.dataset.search = line.repository.id.toLowerCase();
+      if (line.error) section.dataset.error = '';
       const head = element('div', 'repository-head');
       const title = element('h2');
       title.append(externalLink(line.repository.url, '', line.repository.id));
@@ -280,7 +323,7 @@
       if (line.error) section.append(element('p', 'problem', line.error));
       else if (line.skills.length) {
         const list = element('ul', 'skills');
-        for (const skill of line.skills) list.append(skillItem(skill));
+        for (const skill of line.skills) list.append(skillItem(skill, line.repository));
         section.append(list);
       }
       return section;
@@ -308,7 +351,10 @@
           scanned++;
           if (line.skills) skills += line.skills.length;
           // A repository with no skills is not shown: only its warnings.
-          if (line.error || line.skills.length) repositoryList.append(repositorySection(line));
+          if (line.error || line.skills.length) {
+            repositoryList.append(repositorySection(line));
+            applyFilter();
+          }
           if (line.warnings) showWarnings(line.warnings.map((warning) => `${line.repository.id}: ${warning}`));
           else showWarnings([`${line.repository.id}: ${line.error}; skipped`]);
         } else {
@@ -352,7 +398,8 @@
         if (!response.ok) return showError(answer.error);
         showRepository(answer.repository, answer.skills.length);
         if (answer.skills.length === 0) skillList.append(element('li', 'empty', 'No skills in this repository.'));
-        for (const skill of answer.skills) skillList.append(skillItem(skill));
+        for (const skill of answer.skills) skillList.append(skillItem(skill, answer.repository));
+        applyFilter();
         showWarnings(answer.warnings);
       } catch (error) {
         if (id === current) showError(`Cannot reach the server: ${error.message}`);
@@ -363,6 +410,8 @@
         }
       }
     }
+
+    filterInput.addEventListener('input', applyFilter);
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();

@@ -6,6 +6,11 @@
   name linked to the *pinned commit*, the description's *first sentence*, its path, `also in` copies
 - Each skill **once**: its copies (spec/analysis.md, "Copies") only as `also in`
 - Scanning again *replaces* the results; placeholders while it runs
+- A **filter field** above the results, once there are skills: shows only the skills whose *name*, *description*
+  or *repository name* has every word typed, case aside; as you type, in the page, nothing fetched again
+  - `k of N skills match`, or `No skills match "…"`; an organization's repository with no match is hidden,
+    one that could not be scanned stays while its name matches
+  - It filters the repositories still coming in too; a new scan empties it
 - `/?repo=<owner/repo>` scans at once; a scan puts the repository in the address: a link to share
 - Example repositories to try, one click each
 - An organization: `owner · N repositories · M skills` linked, then a section for each repository *as it is
