@@ -25,10 +25,15 @@ export async function openDirectory(input: string): Promise<Source> {
   };
 }
 
-/** Every regular file under the directory, as a path relative to the root. */
+/**
+ * Every regular file under the directory, as a path relative to the root. A directory with its own
+ * `.git` (a submodule, a nested checkout) is another repository: left out, as GitHub's tree does.
+ */
 async function walk(root: string, directory: string, paths: string[] = []): Promise<string[]> {
+  const entries = await readdir(join(root, directory), { withFileTypes: true });
+  if (directory && entries.some((entry) => entry.name === '.git')) return paths;
   // One list for the whole walk: a large repository has more files than a spread can pass.
-  for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
+  for (const entry of entries) {
     const path = directory ? `${directory}/${entry.name}` : entry.name;
     if (entry.isDirectory() && !SKIPPED.has(entry.name)) await walk(root, path, paths);
     else if (entry.isFile()) paths.push(path);

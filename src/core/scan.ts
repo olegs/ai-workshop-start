@@ -17,20 +17,36 @@ export type ScanResult = { repository: Repository; skills: Skill[]; warnings: st
 
 /** fetch → find → parse. Nothing is stored: the result is all there is. */
 export async function scan(source: Source): Promise<ScanResult> {
-  const files = findSkills(source.paths, source.repository.name);
+  const files = findSkills(source.paths);
   // The files are read at the same time: on GitHub, each one is a request.
-  const results = await Promise.all(files.map((file) => readSkill(source, file)));
-  return {
-    repository: source.repository,
-    skills: sortSkills(results.flatMap((result) => (result.skill ? [result.skill] : []))),
-    warnings: [...source.warnings, ...results.flatMap((result) => (result.warning ? [result.warning] : []))],
-  };
+  const contents = await Promise.all(files.map((file) => source.read(file.path)));
+  const warnings = [...source.warnings];
+  const skills: Skill[] = [];
+  // A copy: the same scope and name, the same bytes. findSkills puts the one that stays first.
+  const kept = new Map<string, Skill>();
+  files.forEach((file, index) => {
+    const bytes = contents[index];
+    if (!bytes) {
+      warnings.push(`${file.path}: listed, but not found at the scanned commit; skipped`);
+      return;
+    }
+    // windows-1252 maps every byte to its own character: equal keys, equal bytes.
+    const key = JSON.stringify([file.scope, file.name, new TextDecoder('windows-1252').decode(bytes)]);
+    const original = kept.get(key);
+    if (original) {
+      original.copies.push(file.path);
+      return;
+    }
+    const { skill, warning } = toSkill(source, file, new TextDecoder().decode(bytes));
+    kept.set(key, skill);
+    skills.push(skill);
+    if (warning) warnings.push(warning);
+  });
+  return { repository: source.repository, skills: sortSkills(skills), warnings };
 }
 
-async function readSkill(source: Source, file: SkillFile): Promise<{ skill?: Skill; warning?: string }> {
-  const bytes = await source.read(file.path);
-  if (!bytes) return { warning: `${file.path}: listed, but not found at the scanned commit; skipped` };
-  const parsed = parseSkill(new TextDecoder().decode(bytes));
+function toSkill(source: Source, file: SkillFile, text: string): { skill: Skill; warning?: string } {
+  const parsed = parseSkill(text);
   const skill: Skill = {
     id: `${source.repository.id}:${file.path}`,
     repository: source.repository.id,
@@ -38,7 +54,7 @@ async function readSkill(source: Source, file: SkillFile): Promise<{ skill?: Ski
     name: parsed.name ?? file.name,
     description: parsed.description,
     commit: source.repository.commit,
-    copies: file.copies,
+    copies: [],
   };
   return { skill, warning: parsed.warning && `${file.path}: ${parsed.warning}` };
 }
