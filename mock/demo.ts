@@ -27,33 +27,18 @@ export function previewPath(output: string): string {
 
 /** What a person does on the page; `human` moves, clicks and types like one. */
 async function DEMO(page: Page, human: Human) {
-  await human.pause(1000); // taking in the sunset at the top
+  await human.pause(1500); // the page, nothing below the results: no footer claims that nothing is stored
   await human.click('#repo');
   await human.type('JetBrains');
   await human.pause(250);
   await human.click('#scan');
   await page.locator('#repositories .skill').first().waitFor();
-  await human.pause(700); // the repositories, their names in slanted capitals
-  const card = await page.locator('#repositories .skill').first().boundingBox();
-  if (card) await human.moveTo(card.x + card.width * 0.6, card.y + card.height / 2); // a card glows under the mouse
-  await human.pause(800);
-  await human.click('#filter');
-  await human.type('gradle');
-  await human.pause(1400); // reading what matched
-  await human.clear();
-  await human.type('koog');
-  await human.pause(1300); // a repository's name matches too: its skills only
-  await human.clear();
-  await human.type('cobol');
-  await human.pause(1200); // nothing matches, and the page says so
-  await human.click('.examples button[data-repo="JetBrains/kotlin"]');
-  await page.locator('#skills .skill').first().waitFor();
-  await human.pause(900); // one repository: its skills, the commit they are pinned to
-  const copy = page.locator('#skills .skill', { hasText: 'compiler-test-data' }).first();
-  await copy.scrollIntoViewIfNeeded();
-  const box = await copy.boundingBox();
-  if (box) await human.moveTo(box.x + box.width * 0.6, box.y + box.height / 2); // the skill with a copy, `also in`
-  await human.pause(1400);
+  await page.locator('#loading').waitFor({ state: 'hidden' });
+  await human.pause(1200); // the repositories, their skills
+  await human.scroll(2400); // down to the end of the page, as a person reads on
+  await human.pause(2200); // the last repository, then the page ends: no footer
+  await human.scroll(-2400);
+  await human.pause(1000);
 }
 
 type Human = ReturnType<typeof human>;
@@ -89,6 +74,14 @@ function human(page: Page) {
       await page.mouse.down();
       await pause(70);
       await page.mouse.up();
+    },
+    /** Scrolls by `dy` pixels with the wheel, in a few long flicks: each scrolled frame weighs on the GIF. */
+    async scroll(dy: number) {
+      const flicks = 3;
+      for (let flick = 0; flick < flicks; flick++) {
+        await page.mouse.wheel(0, dy / flicks);
+        await pause(350);
+      }
     },
     /** Empties the focused field, as a person does: everything selected, then deleted. */
     async clear() {

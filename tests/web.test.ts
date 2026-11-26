@@ -91,6 +91,13 @@ test('the page has a repository field and a Scan button', async () => {
   assert.equal(button.textContent, 'Scan');
 });
 
+test('the page has no footer and does not claim that nothing is stored: the server caches', async () => {
+  const html = await (await fetch(base)).text();
+  const { document } = new JSDOM(html).window;
+  assert.equal(document.querySelector('footer'), null);
+  assert.doesNotMatch(document.body.textContent!, /nothing is stored|read live from github/i);
+});
+
 test('the API scans a repository: each skill with its first sentence and pinned link', async () => {
   for (const repo of ['JetBrains/example', 'https://github.com/JetBrains/example']) {
     const { status, body } = await api(repo);
