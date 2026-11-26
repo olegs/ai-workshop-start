@@ -12,7 +12,37 @@ import { EXAMPLE_COMMIT, github } from './helpers.ts';
 
 const LINK = `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`;
 
-const server = createWebServer({ fetch: github, token: 'test' });
+// JetBrains/copies: one skill in two agents' folders with the same bytes, and one whose copy differs.
+const COPIES_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const skillText = (name: string, description: string) => `---\nname: ${name}\ndescription: ${description}\n---\n# ${name}\n`;
+const COPIES_FILES: Record<string, string> = {
+  '.agents/skills/commits/SKILL.md': skillText('commits', 'Write commit messages.'),
+  '.claude/skills/commits/SKILL.md': skillText('commits', 'Write commit messages.'),
+  '.github/skills/commits/SKILL.md': skillText('commits', 'Write commit messages.'),
+  '.agents/skills/review/SKILL.md': skillText('review', 'Review a change.'),
+  '.claude/skills/review/SKILL.md': skillText('review', 'Review a change, the Claude way.'),
+};
+const COPIES = replay(
+  {
+    'https://api.github.com/repos/JetBrains/copies': { status: 200, body: { full_name: 'JetBrains/copies', default_branch: 'main' } },
+    'https://api.github.com/repos/JetBrains/copies/commits/main': { status: 200, body: { sha: COPIES_COMMIT } },
+    'https://api.github.com/search/code?q=filename:SKILL.md+repo:JetBrains/copies&per_page=100&page=1': {
+      status: 200,
+      // Code search can answer the same path twice.
+      body: { total_count: 6, items: [...Object.keys(COPIES_FILES), '.claude/skills/commits/SKILL.md'].map((path) => ({ path })) },
+    },
+    ...Object.fromEntries(
+      Object.entries(COPIES_FILES).map(([path, text]) => [
+        `https://raw.githubusercontent.com/JetBrains/copies/${COPIES_COMMIT}/${path}`,
+        { status: 200, body: text },
+      ]),
+    ),
+  },
+  github,
+);
+const copiesLink = (path: string) => `https://github.com/JetBrains/copies/blob/${COPIES_COMMIT}/${path}`;
+
+const server = createWebServer({ fetch: COPIES, token: 'test' });
 let base = '';
 
 before(async () => {
@@ -152,6 +182,54 @@ test('in the page: an error replaces the results', async () => {
     assert.equal(status.className, 'error');
     assert.match(status.textContent ?? '', /^Cannot reach GitHub: /);
     assert.equal(document.querySelectorAll('#skills li').length, 0);
+  } finally {
+    page.close();
+  }
+});
+
+test('the API lists a skill once, its copies with the same bytes as `copies`; different bytes are two skills', async () => {
+  const { status, body } = await api('JetBrains/copies');
+  assert.equal(status, 200);
+  assert.deepEqual(
+    body.skills.map((skill: { name: string; link: string; copies: string[] }) => [skill.name, skill.link, skill.copies]),
+    [
+      ['commits', copiesLink('.agents/skills/commits/SKILL.md'), ['.claude/skills/commits/SKILL.md', '.github/skills/commits/SKILL.md']],
+      ['review', copiesLink('.agents/skills/review/SKILL.md'), []],
+      ['review', copiesLink('.claude/skills/review/SKILL.md'), []],
+    ],
+  );
+  const ids = body.skills.map((skill: { id: string }) => skill.id);
+  assert.equal(new Set(ids).size, ids.length, 'every skill id is unique');
+});
+
+test('in the page: each skill once, its copies as `also in`', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('JetBrains/copies');
+    assert.equal(document.getElementById('status')!.textContent, 'JetBrains/copies · 3 skills');
+    const items = [...document.querySelectorAll('#skills li')].map((item) =>
+      [...item.querySelectorAll('.name, .summary, .meta')].map((node) => node.textContent),
+    );
+    assert.deepEqual(items, [
+      ['commits', 'Write commit messages.', '.agents/skills/commits/SKILL.md', 'also in .claude/skills/commits/SKILL.md, .github/skills/commits/SKILL.md'],
+      ['review', 'Review a change.', '.agents/skills/review/SKILL.md'],
+      ['review', 'Review a change, the Claude way.', '.claude/skills/review/SKILL.md'],
+    ]);
+  } finally {
+    page.close();
+  }
+});
+
+test('in the page: scanning again replaces the results, it does not add to them', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('JetBrains/copies');
+    await page.scan('JetBrains/copies');
+    assert.equal(document.querySelectorAll('#skills li').length, 3);
+    await page.scan('JetBrains/example');
+    assert.equal(document.querySelectorAll('#skills li').length, 1);
   } finally {
     page.close();
   }
