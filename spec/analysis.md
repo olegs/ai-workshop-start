@@ -36,7 +36,7 @@ The same skill under another agent's folder: one skill, listed `also in <paths>`
 - One repository at a time through the **tree**; code search, a few requests a minute, only where the tree
   is too large for one answer and there is a `GITHUB_TOKEN`
 - A repository that cannot be scanned → a *warning*, the scan goes on
-- A rate limit or a rejected token → the scan *stops*: what was shown stays, the message, exit code 1
+- A rate limit too long to wait out ("Rate limit" below) or a rejected token → the scan *stops*: what was shown stays, the message, exit code 1
 - No repositories → `<owner> · 0 repositories`: not an error
 - Unreachable organization → a clear message, exit code 1
 ## Details
@@ -48,3 +48,11 @@ The same skill under another agent's folder: one skill, listed `also in <paths>`
 - Tree too large for one answer, no `GITHUB_TOKEN` → only the root's skill folders, a *warning*
 - Unreachable repository → a clear message, exit code 1
 - An empty repository, no commits yet → no skills, not an error
+## Rate limit
+GitHub's answer says how long to wait: `retry-after`, else `x-ratelimit-reset` when no requests remain,
+else *a minute*, as GitHub advises for a secondary limit
+- Resets **within a minute** → *waited out*, the request sent again, the scan goes on; at most 3 times a request
+- Longer, or still limited after 3 → the scan *stops*: `GitHub rate limit reached; try again in <a minute | N minutes>`;
+  without `GITHUB_TOKEN`: `GitHub rate limit reached; set GITHUB_TOKEN`
+- A 429, or a 403 its headers or its message call a rate limit; another 403 is not waited
+- The API and a file's bytes alike

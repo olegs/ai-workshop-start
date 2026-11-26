@@ -94,7 +94,7 @@ test('rate limit in the middle → what was scanned stays, the scan stops with t
     stdout,
     ['Limited · 3 repositories', '', 'Limited/a · 1 skill', 'one — The first skill.', `  ${link('Limited/a', '.claude/skills/one/SKILL.md')}`].join('\n'),
   );
-  assert.equal(stderr, 'GitHub rate limit reached; try again in a minute');
+  assert.equal(stderr, 'GitHub rate limit reached; try again in 60 minutes');
 });
 
 test('unreachable organization → a clear message, exit code 1', async () => {

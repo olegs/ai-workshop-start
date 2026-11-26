@@ -54,7 +54,8 @@ const listed = (...ids: string[]) => ids.map((id) => ({ full_name: id, default_b
  * Acme, an organization, listed out of order: Acme/app has two skills; Acme/big has a tree too large for
  * one answer, its skill found through code search; Acme/broken cannot be scanned; Acme/docs has no
  * skills; Acme/empty has no commits.
- * solo, a user with one repository. Limited, an organization whose second repository hits the rate limit.
+ * solo, a user with one repository. Limited, an organization whose second repository hits a rate limit
+ * that resets in an hour.
  * Bare, an organization with no skills at all: Bare/gone's tree is too large, code search lists a SKILL.md
  * that is not there at the scanned commit, a warning; Bare/plain has none.
  * nobody: not on GitHub.
@@ -84,7 +85,12 @@ const ORGANIZATIONS: Recording = {
   [`${API}/users/Limited`]: { status: 200, body: { login: 'Limited', type: 'Organization' } },
   [`${API}/orgs/Limited/repos?per_page=100&page=1`]: { status: 200, body: listed('Limited/a', 'Limited/b', 'Limited/c') },
   ...repository('Limited/a', { '.claude/skills/one/SKILL.md': skillText('one', 'The first skill.') }),
-  [`${API}/repos/Limited/b/commits/main`]: { status: 403, body: { message: 'API rate limit exceeded for user ID 1.' } },
+  // An hour to wait: too long to wait out, the scan stops.
+  [`${API}/repos/Limited/b/commits/main`]: {
+    status: 403,
+    headers: { 'retry-after': '3600' },
+    body: { message: 'API rate limit exceeded for user ID 1.' },
+  },
   ...repository('Limited/c', { '.claude/skills/three/SKILL.md': skillText('three', 'Never scanned.') }),
 
   [`${API}/users/Bare`]: { status: 200, body: { login: 'Bare', type: 'Organization' } },
