@@ -4,9 +4,10 @@ import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { firstSentence } from './commands.ts';
 import { AtlasError } from './core/errors.ts';
-import { openGitHub, parseGitHubUrl, type Fetch } from './core/github.ts';
+import { openGitHub, openGitHubOrganization, parseGitHubOrganizationUrl, parseGitHubUrl, type Fetch } from './core/github.ts';
 import { skillLink } from './core/model.ts';
-import { scan } from './core/scan.ts';
+import { scanOrganization } from './core/organization.ts';
+import { scan, type ScanResult } from './core/scan.ts';
 
 export type WebOptions = {
   fetch: Fetch;
@@ -20,12 +21,38 @@ export type ScanAnswer = {
   warnings: string[];
 };
 
+/**
+ * What `/api/scan` streams for an organization, one JSON object a line: the organization first, then
+ * each repository as soon as it is scanned, a ScanAnswer or an error; `{ error }` alone if it had to stop.
+ */
+export type OrganizationLine =
+  | { organization: { id: string; url: string }; repositories: { id: string; url: string }[] }
+  | ScanAnswer
+  | { repository: { id: string; url: string; commit: string }; error: string }
+  | { error: string };
+
 const PAGE = readFileSync(new URL('./web/index.html', import.meta.url), 'utf8');
 
-/** `owner/repo` is shorthand for `https://github.com/owner/repo`. */
+/** `owner/repo` is shorthand for `https://github.com/owner/repo`, and `owner` for `https://github.com/owner`. */
 export function toGitHubUrl(input: string): string {
   const text = input.trim();
-  return /^[A-Za-z0-9][\w-]*\/[\w.-]+$/.test(text) ? `https://github.com/${text}` : text;
+  return /^[A-Za-z0-9][\w-]*(?:\/[\w.-]+)?$/.test(text) ? `https://github.com/${text}` : text;
+}
+
+function toAnswer(result: ScanResult): ScanAnswer {
+  return {
+    repository: { id: result.repository.id, url: result.repository.url, commit: result.repository.commit },
+    skills: result.skills.map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+      summary: firstSentence(skill.description),
+      path: skill.path,
+      link: skillLink(result.repository, skill),
+      copies: skill.copies,
+    })),
+    warnings: result.warnings,
+  };
 }
 
 export function createWebServer(options: WebOptions): Server {
@@ -42,28 +69,41 @@ export function createWebServer(options: WebOptions): Server {
     if (url.pathname !== '/api/scan') return json(404, { error: 'Not found' });
 
     const repo = url.searchParams.get('repo')?.trim() ?? '';
-    if (!repo) return json(400, { error: 'Enter a GitHub repository, such as JetBrains/kotlin' });
+    if (!repo) return json(400, { error: 'Enter a GitHub repository or organization, such as JetBrains/kotlin or JetBrains' });
     const input = toGitHubUrl(repo);
+    const unexpected = (error: unknown) => `Unexpected error: ${error instanceof Error ? error.message : String(error)}`;
+    if (parseGitHubOrganizationUrl(input)) {
+      let organization;
+      try {
+        organization = await openGitHubOrganization(input, options);
+      } catch (error) {
+        return error instanceof AtlasError ? json(502, { error: error.message }) : json(500, { error: unexpected(error) });
+      }
+      // One line at a time, each repository as soon as it is scanned.
+      response.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' });
+      const line = (body: OrganizationLine) => response.write(`${JSON.stringify(body)}\n`);
+      let closed = false;
+      response.on('close', () => (closed = true));
+      line({
+        organization: { id: organization.id, url: organization.url },
+        repositories: organization.repositories.map(({ id, url }) => ({ id, url })),
+      });
+      try {
+        for await (const { repository, result, error } of scanOrganization(organization)) {
+          if (closed) break; // the page went away or started another scan
+          line(result ? toAnswer(result) : { repository: { id: repository.id, url: repository.url, commit: '' }, error });
+        }
+      } catch (error) {
+        line({ error: error instanceof AtlasError ? error.message : unexpected(error) });
+      }
+      return response.end();
+    }
     if (!parseGitHubUrl(input)) return json(400, { error: `Not a GitHub repository: ${repo}` });
     try {
-      const result = await scan(await openGitHub(input, options));
-      const answer: ScanAnswer = {
-        repository: { id: result.repository.id, url: result.repository.url, commit: result.repository.commit },
-        skills: result.skills.map((skill) => ({
-          id: skill.id,
-          name: skill.name,
-          description: skill.description,
-          summary: firstSentence(skill.description),
-          path: skill.path,
-          link: skillLink(result.repository, skill),
-          copies: skill.copies,
-        })),
-        warnings: result.warnings,
-      };
-      json(200, answer);
+      json(200, toAnswer(await scan(await openGitHub(input, options))));
     } catch (error) {
       if (error instanceof AtlasError) json(502, { error: error.message });
-      else json(500, { error: `Unexpected error: ${error instanceof Error ? error.message : String(error)}` });
+      else json(500, { error: unexpected(error) });
     }
   });
 }

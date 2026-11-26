@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { replay } from '../src/core/replay.ts';
 import { createWebServer, toGitHubUrl } from '../src/web.ts';
-import { EXAMPLE_COMMIT, github } from './helpers.ts';
+import type { Fetch } from '../src/core/github.ts';
+import { commitIn, EXAMPLE_COMMIT, github } from './helpers.ts';
 
 const LINK = `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`;
 
@@ -72,6 +73,8 @@ const api = async (repo: string) => {
 test('owner/repo is shorthand for the GitHub URL', () => {
   assert.equal(toGitHubUrl(' JetBrains/kotlin '), 'https://github.com/JetBrains/kotlin');
   assert.equal(toGitHubUrl('https://github.com/JetBrains/kotlin'), 'https://github.com/JetBrains/kotlin');
+  assert.equal(toGitHubUrl(' JetBrains '), 'https://github.com/JetBrains');
+  assert.equal(toGitHubUrl('https://github.com/JetBrains'), 'https://github.com/JetBrains');
 });
 
 test('the page has a repository field and a Scan button', async () => {
@@ -82,7 +85,7 @@ test('the page has a repository field and a Scan button', async () => {
   const form = document.getElementById('scan-form')!;
   const input = form.querySelector('input#repo') as HTMLInputElement;
   assert.equal(input.type, 'search');
-  assert.equal(input.getAttribute('aria-label'), 'GitHub repository');
+  assert.equal(input.getAttribute('aria-label'), 'GitHub repository or organization');
   const button = form.querySelector('button#scan') as HTMLButtonElement;
   assert.equal(button.type, 'submit');
   assert.equal(button.textContent, 'Scan');
@@ -111,7 +114,7 @@ test('the API scans a repository: each skill with its first sentence and pinned 
 });
 
 test('the API rejects an empty input and anything but a GitHub repository, local directories included', async () => {
-  assert.deepEqual(await api(''), { status: 400, body: { error: 'Enter a GitHub repository, such as JetBrains/kotlin' } });
+  assert.deepEqual(await api(''), { status: 400, body: { error: 'Enter a GitHub repository or organization, such as JetBrains/kotlin or JetBrains' } });
   assert.deepEqual(await api('/etc'), { status: 400, body: { error: 'Not a GitHub repository: /etc' } });
   assert.deepEqual(await api('./fixture'), { status: 400, body: { error: 'Not a GitHub repository: ./fixture' } });
 });
@@ -140,12 +143,12 @@ test('unknown paths are 404', async () => {
 });
 
 /** The page as the server serves it, its own script running, its fetch going to the server. */
-async function openPage(path = '/') {
-  const dom = new JSDOM(await (await fetch(base)).text(), {
-    url: new URL(path, base).href,
+async function openPage(path = '/', server = base) {
+  const dom = new JSDOM(await (await fetch(server)).text(), {
+    url: new URL(path, server).href,
     runScripts: 'dangerously',
     beforeParse: (window) => {
-      window.fetch = (input: string | URL | Request, init?: RequestInit) => fetch(new URL(String(input), base), init);
+      window.fetch = (input: string | URL | Request, init?: RequestInit) => fetch(new URL(String(input), server), init);
     },
   });
   const document = dom.window.document;
@@ -317,7 +320,7 @@ test('in the page: an example repository is scanned on a click', async () => {
   try {
     const { document, window } = page;
     const examples = [...document.querySelectorAll<HTMLButtonElement>('.examples button')];
-    assert.deepEqual(examples.map((example) => example.textContent), ['JetBrains/kotlin', 'JetBrains/MPS', 'JetBrains/koog']);
+    assert.deepEqual(examples.map((example) => example.textContent), ['JetBrains/kotlin', 'JetBrains/MPS', 'JetBrains/koog', 'Kotlin']);
     examples[0].click();
     assert.equal((document.getElementById('scan') as HTMLButtonElement).disabled, true, 'the scan has started');
     await waitFor(() => !(document.getElementById('scan') as HTMLButtonElement).disabled);
@@ -341,4 +344,159 @@ test('the server listens on port 3000 by default', async (t) => {
   });
   assert.equal(line.trim(), 'Skill Atlas on http://localhost:3000');
   assert.equal((await fetch('http://localhost:3000/')).status, 200);
+});
+
+// spec/web.md, "Organization": the repositories of Acme and Limited in tests/helpers.ts, one by one.
+const acmeLink = (id: string, path: string) => `https://github.com/${id}/blob/${commitIn(id)}/${path}`;
+
+/** The lines of an organization's answer. */
+async function lines(repo: string) {
+  const response = await fetch(`${base}/api/scan?repo=${encodeURIComponent(repo)}`);
+  const text = await response.text();
+  assert.ok(text.endsWith('\n'));
+  return { status: response.status, type: response.headers.get('content-type'), lines: text.trimEnd().split('\n').map((line) => JSON.parse(line)) };
+}
+
+test('the API streams an organization: the organization and its repositories, then one line for each as it is scanned', async () => {
+  for (const repo of ['Acme', 'https://github.com/Acme']) {
+    const answer = await lines(repo);
+    assert.equal(answer.status, 200);
+    assert.equal(answer.type, 'application/x-ndjson; charset=utf-8');
+    const ids = ['Acme/app', 'Acme/big', 'Acme/broken', 'Acme/docs', 'Acme/empty'];
+    assert.deepEqual(answer.lines[0], {
+      organization: { id: 'Acme', url: 'https://github.com/Acme' },
+      repositories: ids.map((id) => ({ id, url: `https://github.com/${id}` })),
+    });
+    assert.deepEqual(
+      answer.lines.slice(1).map((line) => [line.repository.id, line.repository.commit, line.skills?.map((skill: { link: string }) => skill.link), line.error]),
+      [
+        ['Acme/app', commitIn('Acme/app'), [acmeLink('Acme/app', '.claude/skills/deploy/SKILL.md'), acmeLink('Acme/app', 'web/.agents/skills/lint/SKILL.md')], undefined],
+        ['Acme/big', commitIn('Acme/big'), [acmeLink('Acme/big', 'modules/x/.claude/skills/release/SKILL.md')], undefined],
+        ['Acme/broken', '', undefined, 'GitHub answered 500 for https://api.github.com/repos/Acme/broken/commits/main: Server Error'],
+        ['Acme/docs', commitIn('Acme/docs'), [], undefined],
+        ['Acme/empty', '', [], undefined],
+      ],
+    );
+    // Each repository's line is what /api/scan answers for that repository alone.
+    assert.deepEqual(Object.keys(answer.lines[1]), ['repository', 'skills', 'warnings']);
+    assert.equal(answer.lines[1].skills[0].summary, 'Deploy the app.');
+  }
+});
+
+test('the API: an unreachable organization → the clear message, status 502; a rate limit stops the stream with `{ error }`', async () => {
+  assert.deepEqual(await api('nobody'), { status: 502, body: { error: 'Organization not found: https://github.com/nobody' } });
+  const limited = await lines('Limited');
+  assert.equal(limited.status, 200);
+  assert.deepEqual(
+    limited.lines.slice(1).map((line) => line.repository?.id ?? line),
+    ['Limited/a', { error: 'GitHub rate limit reached; try again in a minute' }],
+  );
+});
+
+/** Each repository section of the page: its heading, then its skills' names or its error. */
+const sections = (document: Document) =>
+  [...document.querySelectorAll('#repositories .repository')].map((section) => [
+    section.querySelector('h2')!.textContent,
+    ...[...section.querySelectorAll('.skill .name, .problem')].map((node) => node.textContent),
+  ]);
+
+test('in the page: an organization → each repository with its skills, the counts above, failures as warnings', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('Acme');
+    assert.equal(document.getElementById('status')!.textContent, 'Acme · 5 repositories · 3 skills');
+    assert.equal((document.querySelector('#status a') as HTMLAnchorElement).href, 'https://github.com/Acme');
+    assert.deepEqual(sections(document), [
+      ['Acme/app · 2 skills', 'deploy', 'lint'],
+      ['Acme/big · 1 skill', 'release'],
+      ['Acme/broken', 'GitHub answered 500 for https://api.github.com/repos/Acme/broken/commits/main: Server Error'],
+      ['Acme/docs · 0 skills'],
+      ['Acme/empty · 0 skills'],
+    ]);
+    const first = document.querySelector('#repositories .repository')!;
+    assert.equal((first.querySelector('.skill .name') as HTMLAnchorElement).href, acmeLink('Acme/app', '.claude/skills/deploy/SKILL.md'));
+    assert.equal(first.querySelector('.skill .summary')!.textContent, 'Deploy the app.');
+    const commit = first.querySelector('.repository-head .commit') as HTMLAnchorElement;
+    assert.equal(commit.textContent, `@ ${commitIn('Acme/app').slice(0, 7)}`);
+    assert.equal(commit.href, `https://github.com/Acme/app/tree/${commitIn('Acme/app')}`);
+    for (const link of document.querySelectorAll<HTMLAnchorElement>('#results a')) assert.equal(link.target, '_blank');
+    assert.deepEqual(
+      [...document.querySelectorAll('#warnings li')].map((item) => item.textContent),
+      ['warning: Acme/broken: GitHub answered 500 for https://api.github.com/repos/Acme/broken/commits/main: Server Error; skipped'],
+    );
+    assert.equal(page.window.location.search, '?repo=Acme');
+    // Scanning a repository again replaces them.
+    await page.scan('JetBrains/example');
+    assert.equal(document.querySelectorAll('#repositories .repository').length, 0);
+    assert.equal(document.querySelectorAll('#skills .skill').length, 1);
+    assert.equal((document.getElementById('warnings-box') as HTMLDetailsElement).hidden, true);
+  } finally {
+    page.close();
+  }
+});
+
+test('in the page: repositories appear one by one, placeholders below them until the last', async () => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  // GitHub answers Acme/big only once the test lets it.
+  const slow: Fetch = async (url, init) => {
+    if (url === 'https://api.github.com/repos/Acme/big/commits/main') await held;
+    return github(url, init);
+  };
+  const slowServer = createWebServer({ fetch: slow, token: 'test' });
+  await new Promise<void>((resolve) => slowServer.listen(0, '127.0.0.1', resolve));
+  const page = await openPage('/', `http://127.0.0.1:${(slowServer.address() as AddressInfo).port}`);
+  try {
+    const { document, window } = page;
+    const scanning = page.scan('Acme');
+    await waitFor(() => document.querySelectorAll('#repositories .repository').length === 1);
+    assert.deepEqual(sections(document), [['Acme/app · 2 skills', 'deploy', 'lint']]);
+    assert.equal(document.getElementById('status')!.textContent, 'Acme · 5 repositories · 2 skills');
+    assert.equal(document.getElementById('commit')!.textContent, '1 of 5 scanned');
+    const loading = document.getElementById('loading')!;
+    assert.notEqual(window.getComputedStyle(loading).display, 'none');
+    assert.ok(document.getElementById('repositories')!.compareDocumentPosition(loading) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.equal((document.getElementById('scan') as HTMLButtonElement).disabled, true);
+    release();
+    await scanning;
+    assert.equal(document.querySelectorAll('#repositories .repository').length, 5);
+    assert.equal(window.getComputedStyle(loading).display, 'none');
+    assert.equal(document.getElementById('commit')!.textContent, '');
+  } finally {
+    release();
+    page.close();
+    slowServer.close();
+  }
+});
+
+test('in the page: a rate limit stops the scan, what was scanned stays, the reason in the warnings', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('Limited');
+    assert.deepEqual(sections(document), [['Limited/a · 1 skill', 'one']]);
+    assert.equal(document.getElementById('status')!.textContent, 'Limited · 3 repositories · 1 skill');
+    assert.equal((document.getElementById('warnings-box') as HTMLDetailsElement).open, true);
+    assert.deepEqual(
+      [...document.querySelectorAll('#warnings li')].map((item) => item.textContent),
+      ['warning: GitHub rate limit reached; try again in a minute'],
+    );
+  } finally {
+    page.close();
+  }
+});
+
+test('in the page: an unreachable organization → the error replaces the results', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('Acme');
+    await page.scan('nobody');
+    assert.equal(document.getElementById('status')!.className, 'error');
+    assert.equal(document.getElementById('status')!.textContent, 'Organization not found: https://github.com/nobody');
+    assert.equal(document.querySelectorAll('#repositories .repository').length, 0);
+  } finally {
+    page.close();
+  }
 });

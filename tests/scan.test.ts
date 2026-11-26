@@ -92,3 +92,13 @@ test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
     message: 'GitHub rate limit reached; set GITHUB_TOKEN',
   });
 });
+
+test('an empty repository, no commits yet → 0 skills, not an error', async () => {
+  const empty = replay({
+    'https://api.github.com/repos/JetBrains/new': { status: 200, body: { full_name: 'JetBrains/new', default_branch: 'main' } },
+    'https://api.github.com/repos/JetBrains/new/commits/main': { status: 409, body: { message: 'Git Repository is empty.' } },
+  });
+  const { code, stdout, stderr } = await atlas(['scan', 'https://github.com/JetBrains/new'], empty);
+  assert.equal(code, 0, stderr);
+  assert.equal(stdout, 'JetBrains/new · 0 skills');
+});

@@ -1,6 +1,6 @@
 # Repository analysis
 ## Input
-A **GitHub repository** URL, or a local directory
+A **GitHub repository** URL, a **GitHub organization** URL, or a local directory
 ## Output
 Every *project skill*: **name**, **description**, **link**
 ## Architecture
@@ -29,6 +29,16 @@ The same skill under another agent's folder: one skill, listed `also in <paths>`
 - The skill is the one in the first `<root>` of the order above
 - Different bytes → *two skills*, each with its own link
 - The same `<name>` in another `<dir>` → another skill
+## Organization
+`https://github.com/<owner>` (or `github.com/orgs/<owner>`): every repository it owns, *one by one*
+- An organization or a *user*: the same; with `GITHUB_TOKEN`, the private repositories it can see too
+- Sorted by **name**, case aside; each scanned as a repository alone, each shown *as soon as it is scanned*
+- One repository at a time through the **tree**; code search, a few requests a minute, only where the tree
+  is too large for one answer and there is a `GITHUB_TOKEN`
+- A repository that cannot be scanned → a *warning*, the scan goes on
+- A rate limit or a rejected token → the scan *stops*: what was shown stays, the message, exit code 1
+- No repositories → `<owner> · 0 repositories`: not an error
+- Unreachable organization → a clear message, exit code 1
 ## Details
 - **GitHub API**, no clone; *under 5 s* for intellij-community
 - The name: front matter, else the directory `<name>`
@@ -37,3 +47,4 @@ The same skill under another agent's folder: one skill, listed `also in <paths>`
 - No front matter or no description → the name alone
 - Tree too large for one answer, no `GITHUB_TOKEN` → only the root's skill folders, a *warning*
 - Unreachable repository → a clear message, exit code 1
+- An empty repository, no commits yet → no skills, not an error

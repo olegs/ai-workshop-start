@@ -1,12 +1,16 @@
 // The skill-atlas commands. The same code serves the Node CLI and the browser
 // terminal: everything that differs between them comes in through the context.
 import { AtlasError } from './core/errors.ts';
+import type { Organization } from './core/github.ts';
 import { skillLink, type Repository, type Skill } from './core/model.ts';
+import { scanOrganization } from './core/organization.ts';
 import { scan, type Source } from './core/scan.ts';
 
 export type Context = {
   /** Opens what the user asked to scan. */
   open(input: string): Promise<Source>;
+  /** Opens an organization, if that is what the input is: `https://github.com/<owner>`. */
+  organization?(input: string): Promise<Organization> | undefined;
   print(text: string): void;
   /** Errors and warnings. */
   error(text: string): void;
@@ -14,7 +18,8 @@ export type Context = {
 
 const usage = `Usage: skill-atlas <command>
 
-  scan <GitHub URL | directory>   find every SKILL.md in a repository and print it
+  scan <GitHub URL | directory>   find every SKILL.md in a repository and print it;
+                                  for https://github.com/<organization>, in each of its repositories
   help                            show this help`;
 
 /** Runs one command; returns its exit code. */
@@ -34,9 +39,26 @@ export async function run(args: string[], context: Context): Promise<number> {
 
 async function scanCommand(args: string[], context: Context) {
   if (args.length !== 1) throw new AtlasError('Usage: skill-atlas scan <GitHub URL | directory>');
+  const organization = context.organization?.(args[0]);
+  if (organization) return scanOrganizationCommand(await organization, context);
   const result = await scan(await context.open(args[0]));
   printRepository(result.repository, result.skills, context);
   for (const warning of result.warnings) context.error(`warning: ${warning}`);
+}
+
+/** `<organization> · N repositories`, then each repository as soon as it is scanned. */
+async function scanOrganizationCommand(organization: Organization, context: Context) {
+  const count = organization.repositories.length;
+  context.print(`${organization.id} · ${count} ${count === 1 ? 'repository' : 'repositories'}`);
+  for await (const { repository, result, error } of scanOrganization(organization)) {
+    if (error !== undefined) {
+      context.error(`warning: ${repository.id}: ${error}; skipped`);
+      continue;
+    }
+    context.print('');
+    printRepository(result.repository, result.skills, context);
+    for (const warning of result.warnings) context.error(`warning: ${repository.id}: ${warning}`);
+  }
 }
 
 /** `<owner>/<repo> · N skills`, then each skill's name, first sentence and link. */
