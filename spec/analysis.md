@@ -12,14 +12,16 @@ A skill an agent loads when it works in the repository:
 - `<root>`: an agent's skill folder — `.agents/skills`, `.claude/skills`, `.github/skills`, `agent/skills`
 - `<dir>`: the repository root, or *any directory in it* (a module of a monorepo)
 - `<name>`: the skill's directory, *directly* in `<root>`
-- The file is named exactly `SKILL.md`, case-sensitive
+- Names are exact, case-sensitive: `SKILL.md`, and each folder of `<root>`
 ### Not a project skill
 Ignored, *no warning*: a large repository has many.
 - A `SKILL.md` outside a skill folder: docs, test data, the repository root, a plugin's or a
   collection's `skills/`
 - `<root>/SKILL.md`, with no skill directory
-- Deeper inside a skill: `<root>/<name>/…/SKILL.md` is one of the skill's own files, a template
+- Deeper inside a skill: `<root>/<name>/…/SKILL.md` is one of the skill's own files, a template,
+  even where `…` looks like a skill folder: `.claude/skills/agent/skills/x/SKILL.md`
 - Under `node_modules` or `.git`: dependencies, not the project's
+- In a Git submodule, or a nested checkout with its own `.git`: another repository
 - A symbolic link, to a file or a folder: the target is scanned where it really is
 ### Copies
 The same skill under another agent's folder: one skill, listed `also in <paths>`

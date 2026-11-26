@@ -84,11 +84,28 @@ test('not a project skill: outside a skill folder, directly in it, deeper in a s
     '.claude/skills/SKILL.md': skill('skill-folder'),
     '.claude/skills/kept/templates/SKILL.md': skill('template'),
     '.claude/skills/kept/examples/.claude/skills/nested/SKILL.md': skill('example'),
+    '.claude/skills/agent/skills/inner/SKILL.md': skill('inside-a-skill-named-agent'),
+    '.claude/skills/kept/.github/skills/inner/SKILL.md': skill('inside-the-kept-skill'),
     '.claude/skills/lower/skill.md': skill('lowercase'),
     '.claude/skills/upper/Skill.md': skill('mixed-case'),
+    '.GitHub/skills/folder-case/SKILL.md': skill('folder-case'),
+    'Agent/Skills/folder-case/SKILL.md': skill('folder-case-too'),
     'node_modules/pkg/.claude/skills/dep/SKILL.md': skill('dependency'),
   });
   assert.equal(stdout, ['ignored · 1 skill', 'kept — The kept skill.', '  <repo>/.claude/skills/kept/SKILL.md'].join('\n'));
+  assert.equal(stderr, '');
+});
+
+test("a Git submodule or a nested checkout is another repository: its skills are not this one's", async () => {
+  const { stdout, stderr } = await scanFiles('submodules', {
+    '.claude/skills/own/SKILL.md': skill('own'),
+    // A submodule's checkout has a .git file; a nested clone, a .git directory.
+    'vendor/lib/.git': 'gitdir: ../../.git/modules/vendor/lib\n',
+    'vendor/lib/.claude/skills/lib-skill/SKILL.md': skill('lib-skill'),
+    'tools/clone/.git/HEAD': 'ref: refs/heads/main\n',
+    'tools/clone/.agents/skills/clone-skill/SKILL.md': skill('clone-skill'),
+  });
+  assert.equal(stdout, ['submodules · 1 skill', 'own — The own skill.', '  <repo>/.claude/skills/own/SKILL.md'].join('\n'));
   assert.equal(stderr, '');
 });
 
@@ -184,7 +201,7 @@ const repository: Recording = {
   [`${API}/commits/main`]: { status: 200, body: { sha: COMMIT } },
 };
 
-test('GitHub: the same rules on the tree; symbolic links and dependencies are left out', async () => {
+test('GitHub: the same rules on the tree; symbolic links, submodules and dependencies are left out', async () => {
   const result = await scanGitHub({
     ...repository,
     [`${API}/git/trees/${COMMIT}?recursive=1`]: {
@@ -199,6 +216,8 @@ test('GitHub: the same rules on the tree; symbolic links and dependencies are le
           blob('docs/SKILL.md'),
           blob('node_modules/pkg/.claude/skills/dep/SKILL.md'),
           { path: '.claude/skills/linked/SKILL.md', mode: '120000', type: 'blob', sha: 'link' },
+          { path: 'vendor/lib', mode: '160000', type: 'commit', sha: 'submodule' },
+          blob('.claude/skills/agent/skills/inner/SKILL.md'),
         ],
       },
     },

@@ -36,10 +36,9 @@ function skillFile(path: string): SkillFile | undefined {
   const root = segments.slice(-4, -2).join('/');
   if (!name || !SKILL_ROOTS.includes(root)) return undefined;
   const scope = segments.slice(0, -4);
-  // Inside another skill, a SKILL.md is one of that skill's files.
-  if (scope.some((_, index) => SKILL_ROOTS.includes(scope.slice(index, index + 2).join('/')) && index + 2 < scope.length)) {
-    return undefined;
-  }
+  // A skill folder above it: `<root>/<name>/…/SKILL.md` is one of that skill's own files, even when
+  // `…` ends in what looks like a skill folder (`.claude/skills/agent/skills/x/SKILL.md`).
+  if (scope.some((_, index) => SKILL_ROOTS.includes(scope.slice(index, index + 2).join('/')))) return undefined;
   return { path, name, scope: scope.join('/'), root };
 }
 
