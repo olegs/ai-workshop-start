@@ -8,16 +8,19 @@ When the new issue with tag "Delegated to AI" is created of the label is added t
   * Use only the mock data in `mock/`, the same for each demo; add to `mock/github.ts` only what the change needs to be
     seen, and keep `npm test` green
   * Run `npx playwright install --with-deps chromium` and install ffmpeg if missing, then `npm run demo`: it writes
-    `docs/demo.mp4`
+    `docs/demo.mp4` and its animated preview `docs/demo.gif`
   * Watch it: take a few frames with `ffmpeg -ss <second> -i docs/demo.mp4 -frames:v 1 <frame>.png` and look at them;
     the change must be visible, with no error or warning the change did not mean to show
-  * Commit `docs/demo.mp4` with the fix
+  * Commit `docs/demo.mp4` and `docs/demo.gif` with the fix
 * Create a Pull Request with the fix
-* If a demo was recorded, attach it to the Pull Request: a `## Demo` section in its description with a link to the
-  video at the pushed commit, `https://github.com/<owner>/<repo>/blob/<commit>/docs/demo.mp4`, where GitHub plays it,
-  and one line on what it shows. `gh` cannot upload a file as an attachment: the link is the attachment
-* In the fix loop, if a fix changes the UI again, record the demo again, commit it with the fix, and update the link in
-  the Pull Request description
+* If a demo was recorded, attach it to the Pull Request: a `## Demo` section in its description that shows the preview
+  in place, linked to the video, both at the pushed commit, and one line on what it shows:
+  `[![<what it shows>](https://github.com/<owner>/<repo>/raw/<commit>/docs/demo.gif)](https://github.com/<owner>/<repo>/blob/<commit>/docs/demo.mp4)`.
+  `gh` cannot upload a file as an attachment, and GitHub does not play an MP4 from the repository: the GIF is what
+  plays in the description. After pushing, check that the description shows it: `curl -sIL` on the GIF's link answers
+  200, `image/gif`
+* In the fix loop, if a fix changes the UI again, record the demo again, commit it with the fix, and update both links
+  in the Pull Request description to the new commit
 * Check if it could be merged without any merges
 * Check the result of the review automation on the Pull Request
 * If nothing severe was found, merge the Pull Request

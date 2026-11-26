@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Records a short demo of the web view over the mock data: `npm run demo`, into docs/demo.mp4, or the path given.
+// Records a short demo of the web view over the mock data: `npm run demo`, into docs/demo.mp4, or the path given,
+// and its animated GIF preview next to it, docs/demo.gif: the pull request shows the GIF, as GitHub plays no MP4 there.
 // Chromium plays a person: the mouse glides to the field, the words are typed a key at a time, each result is read.
 // At most 10 seconds. Needs Chromium for Playwright (`npx playwright install --with-deps chromium`) and ffmpeg.
 // Change DEMO below to show what a pull request changes in the page.
@@ -7,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright';
 import { createWebServer } from '../src/web.ts';
@@ -16,6 +17,13 @@ import { mockGitHub } from './github.ts';
 /** The longest a demo may be, in seconds. */
 export const MAX_SECONDS = 10;
 const SIZE = { width: 1280, height: 720 };
+/** The GIF preview: narrower and fewer frames than the video, so it stays well under a megabyte. */
+export const PREVIEW = { width: 960, fps: 12 };
+
+/** Where the GIF preview of the video at `output` goes: next to it, the same name, `.gif`. */
+export function previewPath(output: string): string {
+  return output.slice(0, output.length - extname(output).length) + '.gif';
+}
 
 /** What a person does on the page; `human` moves, clicks and types like one. */
 async function DEMO(page: Page, human: Human) {
@@ -95,7 +103,8 @@ const CURSOR = `
   });
 `;
 
-/** Records DEMO into `output`, an MP4 of at most MAX_SECONDS; the seconds it lasts. */
+/** Records DEMO into `output`, an MP4 of at most MAX_SECONDS, and its GIF preview into `previewPath(output)`; the
+ * seconds it lasts. */
 export async function recordDemo(output: string): Promise<number> {
   const server = createWebServer({ fetch: mockGitHub(150) });
   await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
@@ -127,6 +136,13 @@ export async function recordDemo(output: string): Promise<number> {
       '-t', String(MAX_SECONDS), '-an', '-c:v', 'libx264', '-preset', 'slow', '-crf', '28', '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart', output,
     ]);
+    // The same video as an animated GIF, looping: a pull request's description shows it in place.
+    execFileSync('ffmpeg', [
+      '-y', '-loglevel', 'error', '-i', output, '-vf',
+      `fps=${PREVIEW.fps},scale=${PREVIEW.width}:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];` +
+        '[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle',
+      '-loop', '0', previewPath(output),
+    ]);
     return Math.min(seconds, MAX_SECONDS);
   } finally {
     await browser.close();
@@ -138,5 +154,5 @@ export async function recordDemo(output: string): Promise<number> {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const output = resolve(process.argv[2] ?? fileURLToPath(new URL('../docs/demo.mp4', import.meta.url)));
   const seconds = await recordDemo(output);
-  console.log(`${output}: ${seconds.toFixed(1)} s`);
+  console.log(`${output}, ${previewPath(output)}: ${seconds.toFixed(1)} s`);
 }

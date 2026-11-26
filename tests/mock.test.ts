@@ -1,7 +1,7 @@
 // The decisions in spec/demo.md: the mock data the demos show, and the demo video itself.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -84,8 +84,8 @@ const ffmpeg = (() => {
 const { chromium } = await import('playwright');
 const reason = !ffmpeg ? 'no ffmpeg' : !existsSync(chromium.executablePath()) ? 'no Chromium for Playwright' : false;
 
-test('demo: an MP4 of at most 10 seconds, H.264, from the page over the mock data', { skip: reason, timeout: 120_000 }, async () => {
-  const { recordDemo, MAX_SECONDS } = await import('../mock/demo.ts');
+test('demo: an MP4 of at most 10 seconds, H.264, from the page over the mock data, and its GIF preview', { skip: reason, timeout: 120_000 }, async () => {
+  const { recordDemo, previewPath, MAX_SECONDS, PREVIEW } = await import('../mock/demo.ts');
   const directory = mkdtempSync(join(tmpdir(), 'skill-atlas-demo-test-'));
   try {
     const output = join(directory, 'demo.mp4');
@@ -96,6 +96,16 @@ test('demo: an MP4 of at most 10 seconds, H.264, from the page over the mock dat
     assert.equal(streams[0].codec_name, 'h264');
     assert.deepEqual([streams[0].width, streams[0].height], [1280, 720]);
     assert.ok(Number(format.duration) <= MAX_SECONDS + 0.05, `lasts ${format.duration} s`);
+
+    // The preview, next to the video: an animated GIF of the same seconds, small enough for a pull request.
+    const preview = join(directory, 'demo.gif');
+    assert.equal(previewPath(output), preview);
+    assert.ok(statSync(preview).size < 2 * 1024 * 1024, `the preview is ${statSync(preview).size} bytes`);
+    const gif = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,width,height,nb_read_frames:format=duration', '-of', 'json', preview], { encoding: 'utf8' }));
+    assert.equal(gif.streams[0].codec_name, 'gif');
+    assert.deepEqual([gif.streams[0].width, gif.streams[0].height], [PREVIEW.width, PREVIEW.width * 720 / 1280]);
+    assert.ok(Number(gif.streams[0].nb_read_frames) > 1, 'the preview moves');
+    assert.ok(Math.abs(Number(gif.format.duration) - Number(format.duration)) < 0.5, `the preview lasts ${gif.format.duration} s, the video ${format.duration} s`);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
