@@ -16,7 +16,8 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 A GitHub organization's URL, `./skill-atlas scan https://github.com/JetBrains`, scans each of its repositories, one by
 one; set `GITHUB_TOKEN` for a large one.
 
-`npm start` opens the web view on http://localhost:3000: type a repository or an organization, press Scan.
+`npm start` opens the web view on http://localhost:3000: type a repository or an organization, press Scan. It keeps
+what it scanned for 24 hours, so scanning the same repository again does not fetch it from GitHub.
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 
