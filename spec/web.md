@@ -4,6 +4,8 @@
 - Top: a **repository field** and a **Scan** button
 - Bottom: the results — `owner/repo · N skills`, then each skill:
   name linked to the *pinned commit*, the description's *first sentence*, its path, `also in` copies
+- Each skill **once**: its copies (spec/analysis.md, "Copies") only as `also in`
+- Scanning again *replaces* the results
 - Warnings under the results; an error replaces them
 ## API
 `GET /api/scan?repo=<owner/repo | GitHub URL>` → JSON `{ repository, skills, warnings }`
