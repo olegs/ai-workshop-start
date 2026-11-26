@@ -3,15 +3,18 @@
 import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { firstSentence } from './commands.ts';
+import { createCache, DAY } from './core/cache.ts';
 import { AtlasError } from './core/errors.ts';
 import { openGitHub, openGitHubOrganization, parseGitHubOrganizationUrl, parseGitHubUrl, type Fetch } from './core/github.ts';
 import { skillLink } from './core/model.ts';
 import { scanOrganization } from './core/organization.ts';
-import { scan, type ScanResult } from './core/scan.ts';
+import { scan, type ScanResult, type Source } from './core/scan.ts';
 
 export type WebOptions = {
   fetch: Fetch;
   token?: string;
+  /** The clock, in milliseconds; tests pass their own. */
+  now?: () => number;
 };
 
 /** What `/api/scan` answers on success. */
@@ -56,6 +59,15 @@ function toAnswer(result: ScanResult): ScanAnswer {
 }
 
 export function createWebServer(options: WebOptions): Server {
+  // What GitHub answered, kept for a day: scanning the same repository or organization again fetches nothing.
+  // Only results, not GitHub's raw answers: a large repository's tree is let go once it is scanned.
+  // GitHub names are case-insensitive: so are the keys.
+  const cache = createCache({ ttl: DAY, now: options.now });
+  const scanRepository = (id: string, open: () => Promise<Source>) =>
+    cache.get(`repository:${id.toLowerCase()}`, async () => scan(await open()));
+  const openOrganization = (name: string, input: string) =>
+    cache.get(`organization:${name.toLowerCase()}`, () => openGitHubOrganization(input, options));
+
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     const send = (status: number, type: string, body: string) => {
@@ -72,10 +84,11 @@ export function createWebServer(options: WebOptions): Server {
     if (!repo) return json(400, { error: 'Enter a GitHub repository or organization, such as JetBrains/kotlin or JetBrains' });
     const input = toGitHubUrl(repo);
     const unexpected = (error: unknown) => `Unexpected error: ${error instanceof Error ? error.message : String(error)}`;
-    if (parseGitHubOrganizationUrl(input)) {
+    const organizationName = parseGitHubOrganizationUrl(input);
+    if (organizationName) {
       let organization;
       try {
-        organization = await openGitHubOrganization(input, options);
+        organization = await openOrganization(organizationName, input);
       } catch (error) {
         return error instanceof AtlasError ? json(502, { error: error.message }) : json(500, { error: unexpected(error) });
       }
@@ -89,7 +102,9 @@ export function createWebServer(options: WebOptions): Server {
         repositories: organization.repositories.map(({ id, url }) => ({ id, url })),
       });
       try {
-        for await (const { repository, result, error } of scanOrganization(organization)) {
+        for await (const { repository, result, error } of scanOrganization(organization, (repository) =>
+          scanRepository(repository.id, () => organization.open(repository)),
+        )) {
           if (closed) break; // the page went away or started another scan
           line(result ? toAnswer(result) : { repository: { id: repository.id, url: repository.url, commit: '' }, error });
         }
@@ -98,9 +113,10 @@ export function createWebServer(options: WebOptions): Server {
       }
       return response.end();
     }
-    if (!parseGitHubUrl(input)) return json(400, { error: `Not a GitHub repository: ${repo}` });
+    const name = parseGitHubUrl(input);
+    if (!name) return json(400, { error: `Not a GitHub repository: ${repo}` });
     try {
-      json(200, toAnswer(await scan(await openGitHub(input, options))));
+      json(200, toAnswer(await scanRepository(`${name.owner}/${name.repo}`, () => openGitHub(input, options))));
     } catch (error) {
       if (error instanceof AtlasError) json(502, { error: error.message });
       else json(500, { error: unexpected(error) });

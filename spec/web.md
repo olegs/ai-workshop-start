@@ -29,4 +29,13 @@
   `{ error }` last if the scan had to stop. Unreachable organization → *502*, JSON, before any line
 - **GitHub only**: a local directory is rejected, *400* — the page must not read the server's disk
 - Empty input → *400*; unreachable repository → the CLI's clear message, *502*
-- Nothing is stored
+## Cache
+What the server fetched from GitHub is kept **24 hours**, in memory: the same scan again fetches nothing
+- A repository's result, an organization's list of repositories; each repository of an organization as if
+  scanned alone: `owner/repo` after `owner` is not fetched again
+- Any way of naming it, case aside: `owner/repo`, its URL, `OWNER/Repo`
+- Asked for twice at once → fetched once
+- Only what was scanned: an unreachable repository, a repository that could not be scanned, a rate limit
+  are asked for again the next time
+- After 24 hours GitHub is asked again; a restart forgets it all; the oldest go first past 1000 entries
+- Nothing on disk
