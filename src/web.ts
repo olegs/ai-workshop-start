@@ -25,7 +25,7 @@ const PAGE = readFileSync(new URL('./web/index.html', import.meta.url), 'utf8');
 /** `owner/repo` is shorthand for `https://github.com/owner/repo`. */
 export function toGitHubUrl(input: string): string {
   const text = input.trim();
-  return /^[\w.-]+\/[\w.-]+$/.test(text) ? `https://github.com/${text}` : text;
+  return /^[A-Za-z0-9][\w-]*\/[\w.-]+$/.test(text) ? `https://github.com/${text}` : text;
 }
 
 export function createWebServer(options: WebOptions): Server {

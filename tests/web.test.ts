@@ -1,11 +1,11 @@
-// The decisions in spec/web.md: the API on a running server, and the page in a real browser,
+// The decisions in spec/web.md: the API on a running server, and the page in jsdom, its own script running,
 // with GitHub answering from the recording in tests/helpers.ts.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { chromium, type Browser } from 'playwright';
+import { JSDOM } from 'jsdom';
 import { replay } from '../src/core/replay.ts';
 import { createWebServer, toGitHubUrl } from '../src/web.ts';
 import { EXAMPLE_COMMIT, github } from './helpers.ts';
@@ -14,15 +14,12 @@ const LINK = `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claud
 
 const server = createWebServer({ fetch: github, token: 'test' });
 let base = '';
-let browser: Browser;
 
 before(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  browser = await chromium.launch();
 });
 after(async () => {
-  await browser?.close();
   server.close();
 });
 
@@ -96,32 +93,68 @@ test('unknown paths are 404', async () => {
   assert.equal((await fetch(`${base}/nope`)).status, 404);
 });
 
-test('in the browser: type a repository, press Scan, the results appear below', async () => {
-  const page = await browser.newPage();
-  await page.goto(base);
-  await page.fill('#repo', 'JetBrains/example');
-  await page.click('#scan');
-  await page.locator('#skills li').first().waitFor();
-  assert.equal(await page.textContent('#status'), 'JetBrains/example · 1 skill');
-  assert.equal(await page.textContent('#skills .name'), 'commits');
-  assert.equal(await page.getAttribute('#skills .name', 'href'), LINK);
-  assert.equal(await page.textContent('#skills .summary'), 'Write commit messages the way this repository does.');
-  // The results are in the bottom part, under the search field.
-  const form = await page.locator('#scan-form').boundingBox();
-  const results = await page.locator('#results').boundingBox();
-  assert.ok(form && results && results.y >= form.y + form.height);
-  await page.close();
+/** The page as the server serves it, its own script running, its fetch going to the server. */
+async function openPage() {
+  const dom = new JSDOM(await (await fetch(base)).text(), {
+    url: base,
+    runScripts: 'dangerously',
+    beforeParse: (window) => {
+      window.fetch = (input: string | URL | Request, init?: RequestInit) => fetch(new URL(String(input), base), init);
+    },
+  });
+  const document = dom.window.document;
+  const scan = async (repo: string) => {
+    (document.getElementById('repo') as HTMLInputElement).value = repo;
+    (document.getElementById('scan') as HTMLButtonElement).click();
+    // The button is disabled while the scan runs.
+    await waitFor(() => !(document.getElementById('scan') as HTMLButtonElement).disabled);
+  };
+  return { document, scan, close: () => dom.window.close() };
+}
+
+async function waitFor(condition: () => boolean) {
+  for (let i = 0; i < 200 && !condition(); i++) await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.ok(condition(), 'timed out');
+}
+
+test('in the page: type a repository, press Scan, the results appear below', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    // The search field and the button on top, the results in the bottom part.
+    const form = document.getElementById('scan-form')!;
+    const results = document.getElementById('results')!;
+    assert.ok(form.compareDocumentPosition(results) & document.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.equal(document.getElementById('scan')!.textContent, 'Scan');
+
+    await page.scan('JetBrains/example');
+    assert.equal(document.getElementById('status')!.textContent, 'JetBrains/example · 1 skill');
+    const items = document.querySelectorAll('#skills li');
+    assert.equal(items.length, 1);
+    const name = items[0].querySelector('a.name') as HTMLAnchorElement;
+    assert.equal(name.textContent, 'commits');
+    assert.equal(name.href, LINK);
+    assert.equal(items[0].querySelector('.summary')!.textContent, 'Write commit messages the way this repository does.');
+    assert.equal(items[0].querySelector('.meta')!.textContent, '.claude/skills/commits/SKILL.md');
+  } finally {
+    page.close();
+  }
 });
 
-test('in the browser: an error is shown in place of the results', async () => {
-  const page = await browser.newPage();
-  await page.goto(base);
-  await page.fill('#repo', 'JetBrains/not-answered');
-  await page.click('#scan');
-  await page.locator('#status.error').waitFor();
-  assert.match((await page.textContent('#status')) ?? '', /^Cannot reach GitHub: /);
-  assert.equal(await page.locator('#skills li').count(), 0);
-  await page.close();
+test('in the page: an error replaces the results', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('JetBrains/example');
+    assert.equal(document.querySelectorAll('#skills li').length, 1);
+    await page.scan('JetBrains/not-answered');
+    const status = document.getElementById('status')!;
+    assert.equal(status.className, 'error');
+    assert.match(status.textContent ?? '', /^Cannot reach GitHub: /);
+    assert.equal(document.querySelectorAll('#skills li').length, 0);
+  } finally {
+    page.close();
+  }
 });
 
 test('the server listens on port 3000 by default', async (t) => {
