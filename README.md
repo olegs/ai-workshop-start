@@ -13,7 +13,10 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 …
 ```
 
-`npm start` opens the web view on http://localhost:3000: type a repository, press Scan.
+A GitHub organization's URL, `./skill-atlas scan https://github.com/JetBrains`, scans each of its repositories, one by
+one; set `GITHUB_TOKEN` for a large one.
+
+`npm start` opens the web view on http://localhost:3000: type a repository or an organization, press Scan.
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 

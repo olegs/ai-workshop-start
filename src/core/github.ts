@@ -1,4 +1,4 @@
-import { AtlasError } from './errors.ts';
+import { AtlasError, GitHubAccessError } from './errors.ts';
 import { SKILL_ROOTS } from './find.ts';
 import type { Source } from './scan.ts';
 
@@ -29,13 +29,70 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
     `${API}/repos/${name.owner}/${name.repo}`,
     `Repository not found: https://github.com/${name.owner}/${name.repo}`,
   );
-  const id = info.full_name;
-  const { sha } = await github.json<{ sha: string }>(`${API}/repos/${id}/commits/${encodePath(info.default_branch)}`);
-  const warnings: string[] = [];
-  const paths = options.token ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings);
-  const [organization, repo] = id.split('/');
+  // With a token, code search finds skills anywhere at once: the fastest way through a large tree.
+  return openRepository(github, { id: info.full_name, defaultBranch: info.default_branch }, options.token ? 'search' : 'tree');
+}
+
+/** A repository as an organization lists it: no need to ask GitHub for it again. */
+export type RepositoryRef = { id: string; url: string; defaultBranch: string };
+
+/** An organization (or a user) on GitHub, and every repository it owns, sorted by name. */
+export type Organization = {
+  id: string;
+  url: string;
+  repositories: RepositoryRef[];
+  /** Opens one of the repositories, to scan. */
+  open(repository: RepositoryRef): Promise<Source>;
+};
+
+/** `https://github.com/<owner>` (or `github.com/orgs/<owner>`): an organization or a user, not a repository. */
+export function parseGitHubOrganizationUrl(input: string): string | undefined {
+  const match = /^(?:https?:\/\/)?(?:www\.)?github\.com\/(?:orgs\/)?([A-Za-z0-9][A-Za-z0-9-]*)\/?$/i.exec(input.trim());
+  return match?.[1];
+}
+
+/** Lists every repository of an organization or a user, a hundred a page. */
+export async function openGitHubOrganization(input: string, options: GitHubOptions): Promise<Organization> {
+  const name = parseGitHubOrganizationUrl(input);
+  if (!name) throw new AtlasError(`Not a GitHub organization URL: ${input}`);
+  const github = client(options);
+  const owner = await github.json<{ login: string; type: string }>(
+    `${API}/users/${name}`,
+    `Organization not found: https://github.com/${name}`,
+  );
+  // An organization's own list includes the private repositories the token can see.
+  const list = owner.type === 'Organization' ? `${API}/orgs/${owner.login}/repos` : `${API}/users/${owner.login}/repos`;
+  const repositories: RepositoryRef[] = [];
+  for (let page = 1; ; page++) {
+    const items = await github.json<{ full_name: string; default_branch: string }[]>(`${list}?per_page=100&page=${page}`);
+    for (const item of items) repositories.push({ id: item.full_name, url: `https://github.com/${item.full_name}`, defaultBranch: item.default_branch });
+    if (items.length < 100) break;
+  }
+  const compare = (a: string, b: string) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : 0);
+  repositories.sort((a, b) => compare(a.id, b.id));
   return {
-    repository: { id, organization, name: repo, url: `https://github.com/${id}`, commit: sha },
+    id: owner.login,
+    url: `https://github.com/${owner.login}`,
+    repositories,
+    // Code search allows only a few requests a minute: one repository after another goes through the tree,
+    // and searches only where the tree is too large for one answer.
+    open: (repository) => openRepository(github, repository, options.token ? 'tree, then search' : 'tree'),
+  };
+}
+
+type Strategy = 'search' | 'tree' | 'tree, then search';
+
+async function openRepository(github: Client, { id, defaultBranch }: { id: string; defaultBranch: string }, strategy: Strategy): Promise<Source> {
+  const [organization, repo] = id.split('/');
+  const repository = { id, organization, name: repo, url: `https://github.com/${id}`, commit: '' };
+  const commit = await github.json<{ sha: string } | undefined>(`${API}/repos/${id}/commits/${encodePath(defaultBranch)}`);
+  // An empty repository: no commit, no files, no skills.
+  if (!commit) return { repository, paths: [], warnings: [], read: async () => undefined };
+  const sha = commit.sha;
+  const warnings: string[] = [];
+  const paths = strategy === 'search' ? await searchPaths(github, id) : await treePaths(github, id, sha, warnings, strategy === 'tree, then search');
+  return {
+    repository: { ...repository, commit: sha },
     paths,
     warnings,
     read: (path) => github.raw(`${RAW}/${id}/${sha}/${encodePath(path)}`),
@@ -59,9 +116,10 @@ async function searchPaths(github: Client, id: string): Promise<string[]> {
 type Tree = { truncated: boolean; tree: { path: string; mode: string; type: string; sha: string }[] };
 
 /** The whole tree at once, or only the skill roots when it is too large for one answer. */
-async function treePaths(github: Client, id: string, sha: string, warnings: string[]): Promise<string[]> {
+async function treePaths(github: Client, id: string, sha: string, warnings: string[], search = false): Promise<string[]> {
   const tree = await github.json<Tree>(`${API}/repos/${id}/git/trees/${sha}?recursive=1`);
   if (!tree.truncated) return files(tree);
+  if (search) return searchPaths(github, id);
   warnings.push(`the tree is too large to list at once; looked only in ${SKILL_ROOTS.join(', ')} (GITHUB_TOKEN searches everywhere)`);
   const paths: string[] = [];
   for (const root of SKILL_ROOTS) {
@@ -112,10 +170,12 @@ function client({ fetch, token }: GitHubOptions) {
     const message = (body as { message?: unknown } | undefined)?.message;
     const text = typeof message === 'string' ? message : '';
     if (response.status === 404) throw new AtlasError(notFound);
+    // A repository with no commits yet.
+    if (response.status === 409 && /empty/i.test(text)) return undefined;
     if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
-      throw new AtlasError(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
+      throw new GitHubAccessError(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
     }
-    if (response.status === 401) throw new AtlasError('GitHub rejected the token in GITHUB_TOKEN');
+    if (response.status === 401) throw new GitHubAccessError('GitHub rejected the token in GITHUB_TOKEN');
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
   }
 

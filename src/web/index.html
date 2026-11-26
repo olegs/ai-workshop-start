@@ -116,6 +116,19 @@
     .skeleton { height: 5.5rem; border-radius: var(--radius); background: linear-gradient(90deg, var(--chip) 25%, var(--surface) 50%, var(--chip) 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
     @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
     #loading { display: grid; gap: .65rem; }
+    #repositories:not(:empty) + #loading { margin-top: 1.5rem; }
+    /* An organization: one section per repository, in the order they are scanned */
+    #repositories { display: grid; gap: 1.5rem; }
+    #repositories:empty { display: none; }
+    .repository-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem 1rem; margin-bottom: .6rem; }
+    .repository-head h2 { margin: 0; font-size: 1rem; }
+    .repository-head h2 a { text-decoration: none; }
+    .repository-head h2 a:hover { text-decoration: underline; }
+    .repository-head .count { color: var(--muted); font-weight: 500; }
+    .repository-head .commit { font-family: var(--mono); font-size: .8rem; color: var(--muted); text-decoration: none; }
+    .repository-head .commit:hover { color: var(--accent); }
+    .repository .skills { display: grid; gap: .65rem; }
+    .repository .problem { margin: 0; font-size: .875rem; color: var(--danger); }
     #warnings-box { margin-top: 1.25rem; color: var(--warn); background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent); border-radius: var(--radius); padding: .7rem 1rem; font-size: .875rem; }
     #warnings-box summary { cursor: pointer; font-weight: 600; }
     #warnings { margin-top: .5rem; display: grid; gap: .35rem; }
@@ -136,24 +149,25 @@
         <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#4f46e5"/><path d="M16 6l8 4.5v11L16 26l-8-4.5v-11z" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/><path d="M8 10.5l8 4.5 8-4.5M16 15v11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round" opacity=".55"/></svg>
         <h1>Skill Atlas</h1>
       </div>
-      <p class="tagline">Every agent skill in a GitHub repository, with a link to its <code>SKILL.md</code>.</p>
+      <p class="tagline">Every agent skill in a GitHub repository, or in each repository of an organization, with a link to its <code>SKILL.md</code>.</p>
       <form id="scan-form" role="search">
         <label class="field">
           <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-          <input id="repo" name="repo" type="search" placeholder="owner/repo or https://github.com/owner/repo" aria-label="GitHub repository" autocomplete="off" spellcheck="false" required autofocus>
+          <input id="repo" name="repo" type="search" placeholder="owner/repo, an organization, or a GitHub URL" aria-label="GitHub repository or organization" autocomplete="off" spellcheck="false" required autofocus>
         </label>
         <button id="scan" type="submit"><span class="spinner" aria-hidden="true"></span><span>Scan</span></button>
       </form>
-      <p class="examples"><span>Try</span><button type="button" data-repo="JetBrains/kotlin">JetBrains/kotlin</button><button type="button" data-repo="JetBrains/MPS">JetBrains/MPS</button><button type="button" data-repo="JetBrains/koog">JetBrains/koog</button></p>
+      <p class="examples"><span>Try</span><button type="button" data-repo="JetBrains/kotlin">JetBrains/kotlin</button><button type="button" data-repo="JetBrains/MPS">JetBrains/MPS</button><button type="button" data-repo="JetBrains/koog">JetBrains/koog</button><button type="button" data-repo="Kotlin">Kotlin</button></p>
     </div>
   </header>
   <main id="results" class="wrap" aria-live="polite">
     <div class="results-head">
-      <p id="status" class="idle">Enter a repository and press Scan.</p>
+      <p id="status" class="idle">Enter a repository or an organization and press Scan.</p>
       <span id="commit"></span>
     </div>
-    <div id="loading" hidden><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
     <ul id="skills"></ul>
+    <div id="repositories"></div>
+    <div id="loading" hidden><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
     <details id="warnings-box" hidden>
       <summary id="warnings-title"></summary>
       <ul id="warnings"></ul>
@@ -169,6 +183,7 @@
     const commit = $('commit');
     const loading = $('loading');
     const skillList = $('skills');
+    const repositoryList = $('repositories');
     const warningBox = $('warnings-box');
     const warningTitle = $('warnings-title');
     const warningList = $('warnings');
@@ -191,9 +206,12 @@
 
     function reset() {
       skillList.replaceChildren();
+      repositoryList.replaceChildren();
       warningList.replaceChildren();
       warningBox.hidden = true;
       commit.replaceChildren();
+      commit.removeAttribute('title');
+      warningBox.open = false;
     }
 
     function showError(message) {
@@ -236,6 +254,82 @@
       return item;
     }
 
+    const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+
+    function showWarnings(warnings) {
+      for (const warning of warnings) warningList.append(element('li', '', `warning: ${warning}`));
+      const count = warningList.children.length;
+      warningTitle.textContent = plural(count, 'warning', 'warnings');
+      warningBox.hidden = count === 0;
+    }
+
+    /** One repository of an organization: its name, its skill count and commit, then its skills or why it was not scanned. */
+    function repositorySection(line) {
+      const section = element('section', 'repository');
+      const head = element('div', 'repository-head');
+      const title = element('h2');
+      title.append(externalLink(line.repository.url, '', line.repository.id));
+      if (line.skills) title.append(element('span', 'count', ` · ${plural(line.skills.length, 'skill', 'skills')}`));
+      head.append(title);
+      if (line.repository.commit) {
+        const link = externalLink(`${line.repository.url}/tree/${line.repository.commit}`, 'commit', `@ ${line.repository.commit.slice(0, 7)}`);
+        link.title = `Scanned commit ${line.repository.commit}`;
+        head.append(link);
+      }
+      section.append(head);
+      if (line.error) section.append(element('p', 'problem', line.error));
+      else if (line.skills.length) {
+        const list = element('ul', 'skills');
+        for (const skill of line.skills) list.append(skillItem(skill));
+        section.append(list);
+      }
+      return section;
+    }
+
+    /** An organization's answer: a line for the organization, then one for each repository, as each is scanned. */
+    async function readOrganization(response, id) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let total = 0;
+      let scanned = 0;
+      let skills = 0;
+      const showProgress = (done) => {
+        status.lastChild.textContent = ` · ${plural(total, 'repository', 'repositories')} · ${plural(skills, 'skill', 'skills')}`;
+        commit.textContent = done ? '' : `${scanned} of ${total} scanned`;
+      };
+      const show = (line) => {
+        if (line.organization) {
+          total = line.repositories.length;
+          status.className = '';
+          status.replaceChildren(externalLink(line.organization.url, '', line.organization.id), element('span', 'count'));
+          if (total === 0) repositoryList.append(element('p', 'empty', 'No repositories in this organization.'));
+        } else if (line.repository) {
+          scanned++;
+          if (line.skills) skills += line.skills.length;
+          repositoryList.append(repositorySection(line));
+          if (line.warnings) showWarnings(line.warnings.map((warning) => `${line.repository.id}: ${warning}`));
+          else showWarnings([`${line.repository.id}: ${line.error}; skipped`]);
+        } else {
+          // The scan had to stop: what is shown stays, the reason above it.
+          showWarnings([line.error]);
+          warningBox.open = true;
+        }
+        showProgress(false);
+      };
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (id !== current) return reader.cancel();
+        buffer += decoder.decode(value, { stream: !done });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) if (line.trim()) show(JSON.parse(line));
+        if (done) break;
+      }
+      if (buffer.trim()) show(JSON.parse(buffer));
+      showProgress(true);
+    }
+
     async function scan(repo) {
       const id = ++current;
       reset();
@@ -246,17 +340,16 @@
       history.replaceState(null, '', `?repo=${encodeURIComponent(repo)}`);
       try {
         const response = await fetch(`/api/scan?repo=${encodeURIComponent(repo)}`);
+        if (response.ok && (response.headers.get('content-type') ?? '').startsWith('application/x-ndjson')) {
+          return await readOrganization(response, id);
+        }
         const answer = await response.json();
         if (id !== current) return;
         if (!response.ok) return showError(answer.error);
         showRepository(answer.repository, answer.skills.length);
         if (answer.skills.length === 0) skillList.append(element('li', 'empty', 'No skills in this repository.'));
         for (const skill of answer.skills) skillList.append(skillItem(skill));
-        if (answer.warnings.length) {
-          warningTitle.textContent = `${answer.warnings.length} ${answer.warnings.length === 1 ? 'warning' : 'warnings'}`;
-          for (const warning of answer.warnings) warningList.append(element('li', '', `warning: ${warning}`));
-          warningBox.hidden = false;
-        }
+        showWarnings(answer.warnings);
       } catch (error) {
         if (id === current) showError(`Cannot reach the server: ${error.message}`);
       } finally {
