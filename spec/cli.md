@@ -10,3 +10,4 @@ build-tools-bump-gradle-api — Bumps the Gradle API…
 ```
 - Sorted by **name**; the description's *first sentence*
 - `also in <paths>` for copies; warnings go to *stderr*
+- No project skills → `<repo> · 0 skills`, exit code 0: not an error

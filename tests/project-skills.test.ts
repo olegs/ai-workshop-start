@@ -179,6 +179,85 @@ test('the name: front matter, else the directory; no front matter or description
   assert.equal(stderr, 'warning: .claude/skills/plain/SKILL.md: no front matter; using the directory name');
 });
 
+// Shapes seen in real repositories: JetBrains/MPS, JetBrains/koog and JetBrains/android.
+
+test('MPS: every skill in both .agents and .claude; a plugin\'s bundled skills are not the project\'s', async () => {
+  const actions = skill('actions', 'Guidelines for implementing IntelliJ actions (AnAction).');
+  const console = [
+    '---',
+    'name: mps-console',
+    'description: >-',
+    '  Run MPS Console code and `jetbrains.mps.lang.smodel.query` queries in MPS intentions.',
+    '  Covers console commands and result printers.',
+    'type: reference',
+    '---',
+    '# MPS Console',
+    '',
+  ].join('\n');
+  const { stdout, stderr } = await scanFiles('MPS', {
+    '.agents/skills/actions/SKILL.md': actions,
+    '.claude/skills/actions/SKILL.md': actions,
+    '.agents/skills/mps-console/SKILL.md': console,
+    '.claude/skills/mps-console/SKILL.md': console,
+    'plugins/mcp-tools/resources/jetbrains/mps/agents/mcp/skills/mps-tools/SKILL.md': skill('mps-tools'),
+    'agents/skills/no-dot/SKILL.md': skill('no-dot'),
+  });
+  assert.equal(
+    stdout,
+    [
+      'MPS · 2 skills',
+      'actions — Guidelines for implementing IntelliJ actions (AnAction).',
+      '  <repo>/.agents/skills/actions/SKILL.md',
+      '  also in .claude/skills/actions/SKILL.md',
+      'mps-console — Run MPS Console code and `jetbrains.mps.lang.smodel.query` queries in MPS intentions.',
+      '  <repo>/.agents/skills/mps-console/SKILL.md',
+      '  also in .claude/skills/mps-console/SKILL.md',
+    ].join('\n'),
+  );
+  assert.equal(stderr, '');
+});
+
+test("koog: a skill's reference files and the tests' skill resources are not skills", async () => {
+  const { stdout, stderr } = await scanFiles('koog', {
+    '.claude/skills/split-jvm-nonjvm/SKILL.md': [
+      '---',
+      'name: split-jvm-nonjvm',
+      'description: |',
+      '  Splits a class in commonMain into JVM and non-JVM parts.',
+      '  Use for jvmCommonMain and nonJvmCommonMain.',
+      '---',
+      '',
+    ].join('\n'),
+    '.claude/skills/add-java-code-snippets-in-docs/SKILL.md': skill(
+      'add-java-code-snippets-in-docs',
+      'Use when adding Java tabs to docs under docs/docs/**.md that have Kotlin examples.',
+    ),
+    '.claude/skills/add-java-code-snippets-in-docs/reference/pitfalls.md': '# Pitfalls\n',
+    'integration-tests/src/jvmTest/resources/skills/weather-retrieval/SKILL.md': skill('weather-retrieval'),
+    'skills/Module.md': '# Module skills\n',
+  });
+  assert.equal(
+    stdout,
+    [
+      'koog · 2 skills',
+      'add-java-code-snippets-in-docs — Use when adding Java tabs to docs under docs/docs/**.md that have Kotlin examples.',
+      '  <repo>/.claude/skills/add-java-code-snippets-in-docs/SKILL.md',
+      'split-jvm-nonjvm — Splits a class in commonMain into JVM and non-JVM parts.',
+      '  <repo>/.claude/skills/split-jvm-nonjvm/SKILL.md',
+    ].join('\n'),
+  );
+  assert.equal(stderr, '');
+});
+
+test('android: no project skills → 0 skills, exit code 0, no warning', async () => {
+  const { stdout, stderr } = await scanFiles('android', {
+    'README.md': '# Android\n',
+    'docs/skills.md': '# Skills\n',
+  });
+  assert.equal(stdout, 'android · 0 skills');
+  assert.equal(stderr, '');
+});
+
 // The same rules on GitHub, through the tree: no token.
 const COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const API = 'https://api.github.com/repos/JetBrains/tree';
