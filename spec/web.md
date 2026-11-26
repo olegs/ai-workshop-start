@@ -19,6 +19,12 @@
   `k of N scanned` and the placeholders below until the last; warnings name their repository; a rate limit stops it,
   its message in the warnings
 - Light and dark, after the system; narrow screens stack the button under the field
+- The look: a **neon sunset** by the sea, original art, no game's or brand's logo, font or artwork
+  - Top: a sunset sky, a striped sun and a skyline of towers and palms, drawn in the page, hidden from screen readers;
+    the title in bold slanted capitals with a neon glow; the Scan button a pink-to-orange gradient
+  - Light: the sunset, warm sand below; dark: the night after it; neon pink links, teal accents
+  - Each skill a card with a sunset stripe on its left; a repository's name in slanted capitals, underlined in sunset
+  - Nothing fetched for it: no web fonts, no images, the system's fonts only
 - Warnings under the results; an error replaces them
 ## API
 `GET /api/scan?repo=<owner/repo | GitHub URL>` → JSON `{ repository, skills, warnings }`
