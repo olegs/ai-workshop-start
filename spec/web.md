@@ -27,6 +27,7 @@
   - Each skill a card with a sunset stripe on its left; a repository's name in slanted capitals, underlined in sunset
   - Nothing fetched for it: no web fonts, no images, the system's fonts only
 - Warnings under the results; an error replaces them
+- No footer: the page does not claim that nothing is stored, the server keeps what it fetched (Cache)
 ## API
 `GET /api/scan?repo=<owner/repo | GitHub URL>` → JSON `{ repository, skills, warnings }`
 - `owner/repo` is shorthand for `https://github.com/owner/repo`; `owner` for `https://github.com/owner`
