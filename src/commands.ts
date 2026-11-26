@@ -49,7 +49,7 @@ function printRepository(repository: Repository, skills: Skill[], { print }: Con
   }
 }
 
-function firstSentence(text: string): string {
+export function firstSentence(text: string): string {
   const line = text.replace(/\s+/g, ' ').trim();
   return /^.*?[.!?](?=\s|$)/.exec(line)?.[0] ?? line;
 }
