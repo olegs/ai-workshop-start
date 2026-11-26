@@ -12,6 +12,8 @@
   },
   "scripts": {
     "start": "node src/server.ts",
+    "mock": "node mock/server.ts",
+    "demo": "node mock/demo.ts",
     "test": "node --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -22,6 +24,7 @@
     "@types/jsdom": "^30.0.0",
     "@types/node": "^24.19.0",
     "jsdom": "^31.0.1",
+    "playwright": "^1.65.1",
     "typescript": "^7.0.2"
   }
 }
