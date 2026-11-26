@@ -19,9 +19,9 @@ it; over **mock data**, the same in every demo.
   **960** wide, 12 frames a second, under 2 MB. GitHub plays no MP4 committed to a repository, its page only offers to
   download it, and `gh` cannot upload an attachment; a GIF from the repository shows in place in a pull request's
   description
+- Needs Chromium for Playwright (`npx playwright install --with-deps chromium`) and ffmpeg; without them its test is
+  skipped
 ## In the pull request
 A pull request that changes the web view has a `## Demo` section in its description, with the demo at the pushed commit:
 the preview shown in place, a link to the MP4 on it, and one line on what it shows:
 `[![<what it shows>](https://github.com/<owner>/<repo>/raw/<commit>/docs/demo.gif)](https://github.com/<owner>/<repo>/blob/<commit>/docs/demo.mp4)`
-- Needs Chromium for Playwright (`npx playwright install --with-deps chromium`) and ffmpeg; without them its test is
-  skipped
