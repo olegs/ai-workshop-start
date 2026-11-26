@@ -45,7 +45,7 @@ async function DEMO(page: Page, human: Human) {
   await human.pause(1300); // a repository's name matches too: its skills only
   await human.clear();
   await human.type('cobol');
-  await human.pause(1700); // nothing matches, and the page says so
+  await human.pause(1200); // nothing matches, and the page says so
   await human.click('.examples button[data-repo="JetBrains/kotlin"]');
   await page.locator('#skills .skill').first().waitFor();
   await human.pause(900); // one repository: its skills, the commit they are pinned to
@@ -53,7 +53,7 @@ async function DEMO(page: Page, human: Human) {
   await copy.scrollIntoViewIfNeeded();
   const box = await copy.boundingBox();
   if (box) await human.moveTo(box.x + box.width * 0.6, box.y + box.height / 2); // the skill with a copy, `also in`
-  await human.pause(2600);
+  await human.pause(1400);
 }
 
 type Human = ReturnType<typeof human>;
