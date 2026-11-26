@@ -307,7 +307,8 @@
         } else if (line.repository) {
           scanned++;
           if (line.skills) skills += line.skills.length;
-          repositoryList.append(repositorySection(line));
+          // A repository with no skills is not shown: only its warnings.
+          if (line.error || line.skills.length) repositoryList.append(repositorySection(line));
           if (line.warnings) showWarnings(line.warnings.map((warning) => `${line.repository.id}: ${warning}`));
           else showWarnings([`${line.repository.id}: ${line.error}; skipped`]);
         } else {
@@ -327,6 +328,9 @@
         if (done) break;
       }
       if (buffer.trim()) show(JSON.parse(buffer));
+      if (total > 0 && scanned === total && repositoryList.children.length === 0) {
+        repositoryList.append(element('p', 'empty', 'No skills in these repositories.'));
+      }
       showProgress(true);
     }
 

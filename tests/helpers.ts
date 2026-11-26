@@ -55,6 +55,8 @@ const listed = (...ids: string[]) => ids.map((id) => ({ full_name: id, default_b
  * one answer, its skill found through code search; Acme/broken cannot be scanned; Acme/docs has no
  * skills; Acme/empty has no commits.
  * solo, a user with one repository. Limited, an organization whose second repository hits the rate limit.
+ * Bare, an organization with no skills at all: Bare/gone's tree is too large, code search lists a SKILL.md
+ * that is not there at the scanned commit, a warning; Bare/plain has none.
  * nobody: not on GitHub.
  */
 const ORGANIZATIONS: Recording = {
@@ -84,6 +86,16 @@ const ORGANIZATIONS: Recording = {
   ...repository('Limited/a', { '.claude/skills/one/SKILL.md': skillText('one', 'The first skill.') }),
   [`${API}/repos/Limited/b/commits/main`]: { status: 403, body: { message: 'API rate limit exceeded for user ID 1.' } },
   ...repository('Limited/c', { '.claude/skills/three/SKILL.md': skillText('three', 'Never scanned.') }),
+
+  [`${API}/users/Bare`]: { status: 200, body: { login: 'Bare', type: 'Organization' } },
+  [`${API}/orgs/Bare/repos?per_page=100&page=1`]: { status: 200, body: listed('Bare/plain', 'Bare/gone') },
+  ...repository('Bare/gone', { 'README.md': '# gone\n' }, { truncated: true }),
+  [`${API}/search/code?q=filename:SKILL.md+repo:Bare/gone&per_page=100&page=1`]: {
+    status: 200,
+    body: { total_count: 1, items: [{ path: '.claude/skills/gone/SKILL.md' }] },
+  },
+  [`https://raw.githubusercontent.com/Bare/gone/${commitIn('Bare/gone')}/.claude/skills/gone/SKILL.md`]: { status: 404, body: '404: Not Found' },
+  ...repository('Bare/plain', { 'README.md': '# plain\n' }),
 
   [`${API}/users/nobody`]: { status: 404, body: { message: 'Not Found' } },
 };
