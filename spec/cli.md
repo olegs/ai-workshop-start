@@ -10,6 +10,7 @@ build-tools-bump-gradle-api — Bumps the Gradle API…
 ```
 - Sorted by **name**; the description's *first sentence*
 - `also in <paths>` for copies; warnings go to *stderr*
+- A rate limit waited out (spec/analysis.md, "Rate limit"): `warning: GitHub rate limit reached; waiting N s` on stderr
 - No project skills → `<repo> · 0 skills`, exit code 0: not an error
 ## Organization
 ```

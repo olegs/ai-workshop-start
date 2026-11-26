@@ -81,14 +81,16 @@ test('unreachable repository → a clear message, exit code 1', async () => {
   assert.match(offline.stderr, /^Cannot reach GitHub: not recorded: https:\/\/api\.github\.com\/repos\/JetBrains\/not-answered$/);
 });
 
-test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
+test('rate limit, no token → a message that asks for GITHUB_TOKEN', async () => {
+  // GitHub's hourly limit without a token: reset in 40 minutes, too long to wait.
   const limited = replay({
     'https://api.github.com/repos/JetBrains/MPS': {
       status: 403,
+      headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(1_000_000 + 40 * 60) },
       body: { message: 'API rate limit exceeded for 192.0.2.1. (But here is the good news: ...)' },
     },
   });
-  await assert.rejects(openGitHub('https://github.com/JetBrains/MPS', { fetch: limited }), {
+  await assert.rejects(openGitHub('https://github.com/JetBrains/MPS', { fetch: limited, now: () => 1_000_000_000 }), {
     message: 'GitHub rate limit reached; set GITHUB_TOKEN',
   });
 });

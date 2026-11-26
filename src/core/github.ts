@@ -9,7 +9,18 @@ export type GitHubOptions = {
   fetch: Fetch;
   /** With a token, skills are found through code search; without it, through the tree. */
   token?: string;
+  /** Waits out a short rate limit; tests pass their own. */
+  sleep?: (ms: number) => Promise<void>;
+  /** The clock, in milliseconds, to read GitHub's reset time against; tests pass their own. */
+  now?: () => number;
+  /** Told when a short rate limit is waited out, so a scan does not look stuck. */
+  notice?: (text: string) => void;
 };
+
+/** A rate limit that resets within this long is waited out; a longer one stops the scan. */
+export const MAX_WAIT = 60_000;
+/** Each request is tried again at most this many times after a rate limit. */
+export const RETRIES = 3;
 
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
@@ -151,12 +162,12 @@ function files(tree: Tree): string[] {
 
 type Client = ReturnType<typeof client>;
 
-function client({ fetch, token }: GitHubOptions) {
+function client({ fetch, token, sleep = wait, now = Date.now, notice }: GitHubOptions) {
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const answers = new Map<string, Promise<unknown>>(); // the root tree is asked for once per skill root
 
-  async function get(url: string, init?: { headers: Record<string, string> }): Promise<Response> {
+  async function send(url: string, init?: { headers: Record<string, string> }): Promise<Response> {
     try {
       return await fetch(url, init);
     } catch (error) {
@@ -164,18 +175,27 @@ function client({ fetch, token }: GitHubOptions) {
     }
   }
 
+  /** GitHub's answer; a rate limit that resets within a minute is waited out and the request sent again. */
+  async function get(url: string, init?: { headers: Record<string, string> }): Promise<Response> {
+    for (let attempt = 0; ; attempt++) {
+      const response = await send(url, init);
+      if (!(await isRateLimited(response))) return response;
+      const delay = rateLimitDelay(response, now());
+      if (attempt >= RETRIES || delay > MAX_WAIT) {
+        throw new GitHubAccessError(`GitHub rate limit reached; ${token ? `try again in ${minutes(delay)}` : 'set GITHUB_TOKEN'}`);
+      }
+      notice?.(`GitHub rate limit reached; waiting ${Math.ceil(delay / 1000)} s`);
+      await sleep(delay);
+    }
+  }
+
   async function request(url: string, notFound: string): Promise<unknown> {
     const response = await get(url, { headers });
     if (response.ok) return response.json();
-    const body: unknown = await response.json().catch(() => undefined);
-    const message = (body as { message?: unknown } | undefined)?.message;
-    const text = typeof message === 'string' ? message : '';
+    const text = messageOf(await response.json().catch(() => undefined));
     if (response.status === 404) throw new AtlasError(notFound);
     // A repository with no commits yet.
     if (response.status === 409 && /empty/i.test(text)) return undefined;
-    if ((response.status === 403 || response.status === 429) && /rate limit/i.test(text)) {
-      throw new GitHubAccessError(`GitHub rate limit reached; ${token ? 'try again in a minute' : 'set GITHUB_TOKEN'}`);
-    }
     if (response.status === 401) throw new GitHubAccessError('GitHub rejected the token in GITHUB_TOKEN');
     throw new AtlasError(`GitHub answered ${response.status} for ${url}${text && `: ${text}`}`);
   }
@@ -194,6 +214,48 @@ function client({ fetch, token }: GitHubOptions) {
       return new Uint8Array(await response.arrayBuffer());
     },
   };
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function messageOf(body: unknown): string {
+  const message = (body as { message?: unknown } | undefined)?.message;
+  return typeof message === 'string' ? message : '';
+}
+
+/** 429, or a 403 that GitHub explains as a rate limit: in its headers or its message. */
+async function isRateLimited(response: Response): Promise<boolean> {
+  if (response.status === 429) return true;
+  if (response.status !== 403) return false;
+  if (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after')) return true;
+  return /rate limit/i.test(messageOf(await response.clone().json().catch(() => undefined)));
+}
+
+/**
+ * How long GitHub asks to wait, in milliseconds: `retry-after`, else until `x-ratelimit-reset` when no
+ * requests remain, else a minute, as GitHub's documentation advises.
+ */
+function rateLimitDelay(response: Response, now: number): number {
+  const retryAfter = response.headers.get('retry-after');
+  if (retryAfter !== null) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+    const date = Date.parse(retryAfter);
+    if (Number.isFinite(date)) return Math.max(0, date - now);
+  }
+  const reset = Number(response.headers.get('x-ratelimit-reset') ?? NaN);
+  if (response.headers.get('x-ratelimit-remaining') === '0' && Number.isFinite(reset)) {
+    return Math.max(0, reset * 1000 - now) + 1000; // the reset is in whole seconds: a second more to be sure
+  }
+  return 60_000;
+}
+
+/** `a minute`, or `N minutes`, rounded up. */
+function minutes(ms: number): string {
+  const count = Math.ceil(ms / 60_000);
+  return count <= 1 ? 'a minute' : `${count} minutes`;
 }
 
 function encodePath(path: string): string {

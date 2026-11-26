@@ -389,7 +389,7 @@ test('the API: an unreachable organization → the clear message, status 502; a 
   assert.equal(limited.status, 200);
   assert.deepEqual(
     limited.lines.slice(1).map((line) => line.repository?.id ?? line),
-    ['Limited/a', { error: 'GitHub rate limit reached; try again in a minute' }],
+    ['Limited/a', { error: 'GitHub rate limit reached; try again in 60 minutes' }],
   );
 });
 
@@ -510,7 +510,7 @@ test('in the page: a rate limit stops the scan, what was scanned stays, the reas
     assert.equal((document.getElementById('warnings-box') as HTMLDetailsElement).open, true);
     assert.deepEqual(
       [...document.querySelectorAll('#warnings li')].map((item) => item.textContent),
-      ['warning: GitHub rate limit reached; try again in a minute'],
+      ['warning: GitHub rate limit reached; try again in 60 minutes'],
     );
   } finally {
     page.close();
