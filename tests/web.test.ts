@@ -530,3 +530,125 @@ test('in the page: an unreachable organization → the error replaces the result
     page.close();
   }
 });
+
+// spec/web.md, "filter field": the skills shown, narrowed as you type.
+/** Types into the filter, as a user would. */
+function filter(page: Awaited<ReturnType<typeof openPage>>, text: string) {
+  const input = page.document.getElementById('filter') as HTMLInputElement;
+  input.value = text;
+  input.dispatchEvent(new page.window.Event('input', { bubbles: true }));
+}
+const shownSkills = (document: Document) =>
+  [...document.querySelectorAll<HTMLElement>('#results .skill')].filter((skill) => !skill.hidden).map((skill) => skill.querySelector('.meta')!.textContent);
+const shownSections = (document: Document) =>
+  [...document.querySelectorAll<HTMLElement>('#repositories .repository')].filter((section) => !section.hidden).map((section) => section.querySelector('h2 a')!.textContent);
+
+test('in the page: the filter field appears once there are skills, and a new scan empties it', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    const box = document.getElementById('filter-box')!;
+    const input = document.getElementById('filter') as HTMLInputElement;
+    assert.equal(box.hidden, true, 'nothing to filter yet');
+    assert.equal(input.type, 'search');
+    assert.equal(input.getAttribute('aria-label'), 'Filter skills by name, description, or repository');
+    await page.scan('JetBrains/empty');
+    assert.equal(box.hidden, true, 'no skills, no filter');
+    await page.scan('JetBrains/copies');
+    assert.equal(box.hidden, false);
+    // The filter sits above the results.
+    assert.ok(box.compareDocumentPosition(document.getElementById('skills')!) & page.window.Node.DOCUMENT_POSITION_FOLLOWING);
+    filter(page, 'review');
+    assert.equal(shownSkills(document).length, 2);
+    await page.scan('JetBrains/copies');
+    assert.equal(input.value, '');
+    assert.equal(shownSkills(document).length, 3);
+    assert.equal(document.getElementById('filter-note')!.hidden, true);
+  } finally {
+    page.close();
+  }
+});
+
+test('in the page: the filter matches a skill by name or description, every word, case aside', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('JetBrains/copies');
+    const note = document.getElementById('filter-note')!;
+    assert.equal(note.hidden, true);
+    filter(page, 'COMMITS');
+    assert.deepEqual(shownSkills(document), ['.agents/skills/commits/SKILL.md']);
+    assert.equal(note.hidden, false);
+    assert.equal(note.textContent, '1 of 3 skills match');
+    // The description, beyond its first sentence too.
+    filter(page, 'claude way');
+    assert.deepEqual(shownSkills(document), ['.claude/skills/review/SKILL.md']);
+    filter(page, 'change review');
+    assert.deepEqual(shownSkills(document), ['.agents/skills/review/SKILL.md', '.claude/skills/review/SKILL.md']);
+    assert.equal(note.textContent, '2 of 3 skills match');
+    filter(page, 'nothing like this');
+    assert.deepEqual(shownSkills(document), []);
+    assert.equal(note.textContent, 'No skills match “nothing like this”.');
+    filter(page, '  ');
+    assert.equal(shownSkills(document).length, 3);
+    assert.equal(note.hidden, true);
+  } finally {
+    page.close();
+  }
+});
+
+test('in the page: the filter matches the repository name; a repository with no match is hidden', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    await page.scan('JetBrains/example');
+    filter(page, 'jetbrains/example');
+    assert.equal(shownSkills(document).length, 1);
+    await page.scan('Acme');
+    assert.deepEqual(shownSections(document), ['Acme/app', 'Acme/big', 'Acme/broken']);
+    filter(page, 'acme/big');
+    assert.deepEqual(shownSections(document), ['Acme/big']);
+    assert.deepEqual(shownSkills(document), ['modules/x/.claude/skills/release/SKILL.md']);
+    // A skill's name: only its repository's section.
+    filter(page, 'deploy');
+    assert.deepEqual(shownSections(document), ['Acme/app']);
+    assert.deepEqual(shownSkills(document), ['.claude/skills/deploy/SKILL.md']);
+    assert.equal(document.getElementById('filter-note')!.textContent, '1 of 3 skills match');
+    // A repository that could not be scanned stays while its name matches.
+    filter(page, 'broken');
+    assert.deepEqual(shownSections(document), ['Acme/broken']);
+    assert.equal(document.getElementById('filter-note')!.textContent, 'No skills match “broken”.');
+    filter(page, '');
+    assert.deepEqual(shownSections(document), ['Acme/app', 'Acme/big', 'Acme/broken']);
+  } finally {
+    page.close();
+  }
+});
+
+test('in the page: the filter applies to repositories still coming in', async () => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const slow: Fetch = async (url, init) => {
+    if (url === 'https://api.github.com/repos/Acme/big/commits/main') await held;
+    return github(url, init);
+  };
+  const slowServer = createWebServer({ fetch: slow, token: 'test' });
+  await new Promise<void>((resolve) => slowServer.listen(0, '127.0.0.1', resolve));
+  const page = await openPage('/', `http://127.0.0.1:${(slowServer.address() as AddressInfo).port}`);
+  try {
+    const { document } = page;
+    const scanning = page.scan('Acme');
+    await waitFor(() => document.querySelectorAll('#repositories .repository').length === 1);
+    assert.equal(document.getElementById('filter-box')!.hidden, false);
+    filter(page, 'release');
+    assert.deepEqual(shownSections(document), []);
+    release();
+    await scanning;
+    assert.deepEqual(shownSections(document), ['Acme/big']);
+    assert.deepEqual(shownSkills(document), ['modules/x/.claude/skills/release/SKILL.md']);
+  } finally {
+    release();
+    page.close();
+    slowServer.close();
+  }
+});
