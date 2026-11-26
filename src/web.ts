@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { firstSentence } from './commands.ts';
-import { createCache, DAY } from './core/cache.ts';
+import { createCache, DAY, LIMIT } from './core/cache.ts';
 import { AtlasError } from './core/errors.ts';
 import { openGitHub, openGitHubOrganization, parseGitHubOrganizationUrl, parseGitHubUrl, type Fetch } from './core/github.ts';
 import { skillLink } from './core/model.ts';
@@ -15,6 +15,8 @@ export type WebOptions = {
   token?: string;
   /** The clock, in milliseconds; tests pass their own. */
   now?: () => number;
+  /** At most this many scans kept, each repository of an organization one; 20 000 by default. */
+  cacheLimit?: number;
 };
 
 /** What `/api/scan` answers on success. */
@@ -62,7 +64,7 @@ export function createWebServer(options: WebOptions): Server {
   // What GitHub answered, kept for a day: scanning the same repository or organization again fetches nothing.
   // Only results, not GitHub's raw answers: a large repository's tree is let go once it is scanned.
   // GitHub names are case-insensitive: so are the keys.
-  const cache = createCache({ ttl: DAY, now: options.now });
+  const cache = createCache({ ttl: DAY, limit: options.cacheLimit ?? LIMIT, now: options.now });
   const scanRepository = (id: string, open: () => Promise<Source>) =>
     cache.get(`repository:${id.toLowerCase()}`, async () => scan(await open()));
   const openOrganization = (name: string, input: string) =>

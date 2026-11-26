@@ -37,5 +37,6 @@ What the server fetched from GitHub is kept **24 hours**, in memory: the same sc
 - Asked for twice at once → fetched once
 - Only what was scanned: an unreachable repository, a repository that could not be scanned, a rate limit
   are asked for again the next time
-- After 24 hours GitHub is asked again; a restart forgets it all; the oldest go first past 1000 entries
+- After 24 hours GitHub is asked again; a restart forgets it all; the oldest go first past 20 000 entries,
+  each repository of an organization one: well above the largest organization, scanned again, fetches nothing
 - Nothing on disk

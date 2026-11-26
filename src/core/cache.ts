@@ -1,10 +1,16 @@
 /** A day, in milliseconds: how long the web server keeps what it fetched from GitHub. */
 export const DAY = 24 * 60 * 60 * 1000;
 
+/** How many answers the web server keeps: a result is names, descriptions and paths, a few kilobytes. */
+export const LIMIT = 20_000;
+
 export type CacheOptions = {
   /** How long an answer is kept, in milliseconds. */
   ttl?: number;
-  /** At most this many answers; the oldest goes first. */
+  /**
+   * At most this many answers; the oldest goes first. Each repository of an organization is one, so it must
+   * be well above the largest organization: else a second scan finds its first repositories already gone.
+   */
   limit?: number;
   /** The clock, in milliseconds; tests pass their own. */
   now?: () => number;
@@ -14,15 +20,15 @@ export type CacheOptions = {
  * Answers by key, each kept for `ttl` after it was asked for. The same key asked again while the first
  * answer is on its way gets that answer too. A failure is not kept: the next ask tries again.
  */
-export function createCache({ ttl = DAY, limit = 1000, now = Date.now }: CacheOptions = {}) {
+export function createCache({ ttl = DAY, limit = LIMIT, now = Date.now }: CacheOptions = {}) {
   const entries = new Map<string, { expires: number; value: Promise<unknown> }>();
 
   function prune() {
+    // A Map keeps its insertion order, and every entry is kept as long: the first entries expire first.
+    // Only the expired ones and the oldest past the limit are looked at, not every entry.
     const time = now();
-    for (const [key, entry] of entries) if (entry.expires <= time) entries.delete(key);
-    // A Map keeps its insertion order: the first entries are the oldest.
-    for (const key of entries.keys()) {
-      if (entries.size < limit) break;
+    for (const [key, entry] of entries) {
+      if (entry.expires > time && entries.size < limit) break;
       entries.delete(key);
     }
   }

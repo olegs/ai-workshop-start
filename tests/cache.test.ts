@@ -9,7 +9,7 @@ import { createWebServer } from '../src/web.ts';
 import { github } from './helpers.ts';
 
 /** A server on its own cache and clock, and the GitHub requests it made. */
-async function serve(t: TestContext, fetch: Fetch = github) {
+async function serve(t: TestContext, fetch: Fetch = github, cacheLimit?: number) {
   const requests: string[] = [];
   const clock = { time: Date.parse('2026-11-26T12:00:00Z') };
   const server = createWebServer({
@@ -19,6 +19,7 @@ async function serve(t: TestContext, fetch: Fetch = github) {
     },
     token: 'test',
     now: () => clock.time,
+    cacheLimit,
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => server.close());
@@ -108,6 +109,44 @@ test('the same repository asked for twice at once: fetched from GitHub once', as
   // Each request once: the second scan waited for the first one's answer.
   assert.equal(requests.length, 4);
   assert.equal(new Set(requests).size, requests.length);
+});
+
+/** Huge, an organization of 1200 repositories with no skills, more than one fetch per repository. */
+const HUGE = 1200;
+const huge: Fetch = async (url, init) => {
+  const api = 'https://api.github.com';
+  const answer = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+  if (url === `${api}/users/Huge`) return answer({ login: 'Huge', type: 'Organization' });
+  const page = /^https:\/\/api\.github\.com\/orgs\/Huge\/repos\?per_page=100&page=(\d+)$/.exec(url);
+  if (page) {
+    const start = (Number(page[1]) - 1) * 100;
+    const ids = Array.from({ length: Math.max(0, Math.min(100, HUGE - start)) }, (_, i) => `Huge/r${String(start + i).padStart(4, '0')}`);
+    return answer(ids.map((id) => ({ full_name: id, default_branch: 'main' })));
+  }
+  if (/\/repos\/Huge\/r\d+\/commits\/main$/.test(url)) return answer({ sha: 'a'.repeat(40) });
+  if (/\/repos\/Huge\/r\d+\/git\/trees\//.test(url)) return answer({ truncated: false, tree: [] });
+  return github(url, init);
+};
+
+test('an organization of more than a thousand repositories, scanned again: nothing fetched', async (t) => {
+  const { scan } = await serve(t, huge);
+  const first = await scan('Huge');
+  assert.equal(first.text.trimEnd().split('\n').length, 1 + HUGE);
+  assert.ok(first.requests.length > 2 * HUGE);
+  const again = await scan('Huge');
+  assert.equal(again.text, first.text);
+  assert.deepEqual(again.requests, []);
+});
+
+test('a server keeps at most its cache limit, the oldest go first', async (t) => {
+  // Acme: its list and four repositories scanned; Acme/broken is not kept.
+  const fits = await serve(t, github, 5);
+  await fits.scan('Acme');
+  assert.deepEqual((await fits.scan('Acme')).requests, ['https://api.github.com/repos/Acme/broken/commits/main']);
+  const small = await serve(t, github, 4);
+  const first = await small.scan('Acme');
+  // Past the limit, the list went first: all is fetched again.
+  assert.deepEqual((await small.scan('Acme')).requests, first.requests);
 });
 
 test('the cache keeps at most its limit, the oldest goes first', async () => {
