@@ -667,6 +667,8 @@ test('the page: a neon sunset look, light and dark, drawn in the page with nothi
   assert.match(css, /--sky:\s*linear-gradient/);
   assert.match(css, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{[^}]*--sky:/, 'a night sky for dark');
   assert.match(css, /h1\s*\{[^}]*font-style:\s*italic;[^}]*text-transform:\s*uppercase;[^}]*text-shadow:/);
+  // Keyboard focus in the header stands out against the sky, not the pink accent on a pink sunset.
+  assert.match(css, /header :focus-visible\s*\{[^}]*outline:\s*3px solid #fff;[^}]*box-shadow:\s*0 0 0 7px #2a0b45/);
   assert.match(css, /\.skill::before\s*\{[^}]*linear-gradient/);
   // Nothing fetched for the look: no external stylesheet, font or image.
   assert.doesNotMatch(html, /@import|@font-face|url\(\s*['"]?https?:/);

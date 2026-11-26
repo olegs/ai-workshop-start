@@ -22,6 +22,7 @@
 - The look: a **neon sunset** by the sea, original art, no game's or brand's logo, font or artwork
   - Top: a sunset sky, a striped sun and a skyline of towers and palms, drawn in the page, hidden from screen readers;
     the title in bold slanted capitals with a neon glow; the Scan button a pink-to-orange gradient
+  - Keyboard focus on the sky: a white ring with a dark halo, seen against every colour of the sunset
   - Light: the sunset, warm sand below; dark: the night after it; neon pink links, teal accents
   - Each skill a card with a sunset stripe on its left; a repository's name in slanted capitals, underlined in sunset
   - Nothing fetched for it: no web fonts, no images, the system's fonts only
