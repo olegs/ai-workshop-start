@@ -320,7 +320,7 @@ test('in the page: an example repository is scanned on a click', async () => {
   try {
     const { document, window } = page;
     const examples = [...document.querySelectorAll<HTMLButtonElement>('.examples button')];
-    assert.deepEqual(examples.map((example) => example.textContent), ['JetBrains/kotlin', 'JetBrains/MPS', 'JetBrains/koog', 'Kotlin']);
+    assert.deepEqual(examples.map((example) => example.textContent), ['JetBrains/kotlin', 'JetBrains/MPS', 'JetBrains/koog']);
     examples[0].click();
     assert.equal((document.getElementById('scan') as HTMLButtonElement).disabled, true, 'the scan has started');
     await waitFor(() => !(document.getElementById('scan') as HTMLButtonElement).disabled);

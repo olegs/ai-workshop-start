@@ -76,7 +76,8 @@ export async function openGitHubOrganization(input: string, options: GitHubOptio
     repositories,
     // Code search allows only a few requests a minute: one repository after another goes through the tree,
     // and searches only where the tree is too large for one answer.
-    open: (repository) => openRepository(github, repository, options.token ? 'tree, then search' : 'tree'),
+    // Each repository its own client: its answers, its trees, are let go once it is scanned.
+    open: (repository) => openRepository(client(options), repository, options.token ? 'tree, then search' : 'tree'),
   };
 }
 
