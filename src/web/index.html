@@ -132,8 +132,29 @@
     #commit a { text-decoration: none; }
     #commit a:hover { color: var(--accent-2); }
     /* The filter: narrows the results shown, by a skill's name or description, or its repository */
-    .filter { position: relative; display: block; margin-bottom: .9rem; }
+    .tools { display: flex; gap: .6rem; align-items: flex-start; }
+    .filter { position: relative; display: block; flex: 1; margin-bottom: .9rem; }
     .filter input { height: 2.5rem; font-size: .925rem; }
+    /* The Cluster button: groups similar skills; pressed, it wears the sunset like the Scan button */
+    #cluster {
+      display: inline-flex; align-items: center; gap: .45rem; height: 2.5rem; padding: 0 1rem; flex: none;
+      font: inherit; font-family: var(--display); font-style: italic; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; font-size: .95rem;
+      color: var(--accent); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); cursor: pointer;
+      transition: border-color .15s, box-shadow .15s, filter .15s;
+    }
+    #cluster:hover { border-color: var(--accent); box-shadow: 0 0 0 4px var(--glow); }
+    #cluster[aria-pressed="true"] { color: #fff; background: linear-gradient(135deg, #ff2e88 0%, #ff7a3d 100%); border-color: transparent; text-shadow: 0 1px 2px rgb(42 11 69 / 0.45); }
+    #cluster:disabled { cursor: progress; opacity: .6; }
+    /* The clusters: a map of the skills, then a section for each group of similar skills */
+    #clusters { display: grid; gap: 1.5rem; }
+    #cluster-note { margin: 0; font-size: .875rem; color: var(--muted); }
+    #cluster-map { height: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    #cluster-map .problem { margin: 0; padding: 1rem; font-size: .875rem; color: var(--danger); }
+    #cluster-groups { display: grid; gap: 1.5rem; }
+    .cluster .repository-head h2 { display: flex; align-items: center; gap: .5rem; }
+    .cluster .swatch { flex: none; width: .8rem; height: .8rem; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+    .skill .repository-name { font-weight: 600; color: var(--accent-2); }
+    .skill.picked { border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow), 0 8px 26px var(--glow); }
     #filter-note { margin: 0 0 .9rem; font-size: .875rem; color: var(--muted); }
     ul { list-style: none; margin: 0; padding: 0; }
     #skills { display: grid; gap: .65rem; }
@@ -172,6 +193,8 @@
     #warnings li { overflow-wrap: anywhere; }
     @media (max-width: 34rem) {
       header { padding-top: 2rem; }
+      .tools { flex-direction: column; align-items: stretch; gap: 0; }
+      #cluster { justify-content: center; margin-bottom: .9rem; }
       .sun { width: 10rem; height: 10rem; right: -2rem; }
       form { flex-direction: column; }
       button[type="submit"] { width: 100%; }
@@ -204,19 +227,28 @@
       <p id="status" class="idle">Enter a repository or an organization and press Scan.</p>
       <span id="commit"></span>
     </div>
-    <label class="field filter" id="filter-box" hidden>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 011.75 2h12.5a.75.75 0 01.53 1.28L10 8.06v4.69a.75.75 0 01-.33.62l-2.5 1.67A.75.75 0 016 14.42V8.06L1.22 3.28A.75.75 0 011 2.75z"/></svg>
-      <input id="filter" type="search" placeholder="Filter by name, description, or repository" aria-label="Filter skills by name, description, or repository" autocomplete="off" spellcheck="false">
-    </label>
+    <div class="tools">
+      <label class="field filter" id="filter-box" hidden>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 2.75A.75.75 0 011.75 2h12.5a.75.75 0 01.53 1.28L10 8.06v4.69a.75.75 0 01-.33.62l-2.5 1.67A.75.75 0 016 14.42V8.06L1.22 3.28A.75.75 0 011 2.75z"/></svg>
+        <input id="filter" type="search" placeholder="Filter by name, description, or repository" aria-label="Filter skills by name, description, or repository" autocomplete="off" spellcheck="false">
+      </label>
+      <button id="cluster" type="button" aria-pressed="false" title="Group the skills that say similar things" hidden><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="4" cy="4.5" r="2.2"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="5.5" cy="8" r="1.6"/><circle cx="11.5" cy="10.5" r="2.2"/><circle cx="12.5" cy="6.5" r="1.4"/><circle cx="8.5" cy="12.5" r="1.5"/></svg><span>Cluster</span></button>
+    </div>
     <p id="filter-note" hidden></p>
     <ul id="skills"></ul>
     <div id="repositories"></div>
+    <section id="clusters" aria-label="Similar skills, grouped" hidden>
+      <p id="cluster-note"></p>
+      <div id="cluster-map" role="img" aria-label="A map of the skills: similar skills close together, each group in its colour"></div>
+      <div id="cluster-groups"></div>
+    </section>
     <div id="loading" hidden><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
     <details id="warnings-box" hidden>
       <summary id="warnings-title"></summary>
       <ul id="warnings"></ul>
     </details>
   </main>
+  <script src="/cluster.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const form = $('scan-form');
@@ -233,7 +265,16 @@
     const filterBox = $('filter-box');
     const filterInput = $('filter');
     const filterNote = $('filter-note');
+    const clusterButton = $('cluster');
+    const clusterView = $('clusters');
+    const clusterNote = $('cluster-note');
+    const clusterMap = $('cluster-map');
+    const clusterGroups = $('cluster-groups');
     let current = 0; // only the latest scan's answer is shown
+    /** Every skill of the scan shown, `{ skill, repository }`, in the order shown: what the Cluster button groups. */
+    let scanned = [];
+    /** The clusters shown, or null: `{ result, cards, colors }`, a card and a colour for each skill and group. */
+    let clustered = null;
 
     function element(tag, className, text) {
       const node = document.createElement(tag);
@@ -251,6 +292,8 @@
     }
 
     function reset() {
+      scanned = [];
+      hideClusters();
       skillList.replaceChildren();
       repositoryList.replaceChildren();
       warningList.replaceChildren();
@@ -266,14 +309,20 @@
     const filterWords = () => filterInput.value.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = (text, words) => words.every((word) => text.includes(word));
 
-    /** Shows only the skills that match the filter; a repository section only with a match. */
+    /** Shows only the skills that match the filter; a repository section only with a match, a group the same. */
     function applyFilter() {
       const words = filterWords();
-      const skills = [...document.querySelectorAll('#results .skill')];
+      // The list's cards: the clusters' are the same skills again.
+      const skills = [...skillList.querySelectorAll('.skill'), ...repositoryList.querySelectorAll('.skill')];
       let shown = 0;
       for (const skill of skills) {
         skill.hidden = !matches(skill.dataset.search, words);
         if (!skill.hidden) shown++;
+      }
+      if (clustered) {
+        for (const card of clustered.cards) card.hidden = !matches(card.dataset.search, words);
+        for (const group of clusterGroups.querySelectorAll('.cluster')) group.hidden = !group.querySelector('.skill:not([hidden])');
+        drawMap();
       }
       for (const section of repositoryList.querySelectorAll('.repository')) {
         // A repository that could not be scanned: shown while its name matches.
@@ -282,6 +331,7 @@
           : !matches(section.dataset.search, words);
       }
       filterBox.hidden = skills.length === 0;
+      clusterButton.hidden = skills.length === 0;
       filterNote.hidden = words.length === 0 || skills.length === 0;
       filterNote.textContent = shown === 0
         ? `No skills match “${filterInput.value.trim()}”.`
@@ -306,7 +356,9 @@
       }
     }
 
-    function skillItem(skill, repository) {
+    /** A skill's card; `named`, its repository's name before its path, for the clusters, where repositories mix. */
+    function skillItem(skill, repository, named = false) {
+      if (!named) scanned.push({ skill, repository });
       const item = element('li', 'skill');
       item.dataset.search = [skill.name, skill.description, repository.id].join('\n').toLowerCase();
       item.append(externalLink(skill.link, 'name', skill.name));
@@ -316,6 +368,7 @@
         item.append(summary);
       }
       const path = element('div', 'meta');
+      if (named) path.append(element('span', 'repository-name', repository.id), ' ');
       path.append(element('code', '', skill.path));
       item.append(path);
       if (skill.copies.length) {
@@ -414,10 +467,165 @@
       showProgress(true);
     }
 
+    // The clusters: the skills shown, grouped by what they say (cluster.js), on a map drawn by Plotly.
+    /** The colours of the groups, after the sunset; the skills in no group in grey. */
+    const PALETTE = ['#ff2e88', '#0a9396', '#ff7a3d', '#7b2cbf', '#e0a100', '#2f6fdf', '#c2126b', '#2a9d4b', '#d35400', '#5e60ce'];
+    const OTHER_COLOR = '#9a8aa5';
+
+    let plotlyLoading = null;
+    /** Plotly, from the server, the first time the map is drawn: the page does not need it until then. */
+    function loadPlotly() {
+      if (window.Plotly) return Promise.resolve(window.Plotly);
+      plotlyLoading ??= new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = '/plotly.min.js';
+        script.onload = () => (window.Plotly ? resolve(window.Plotly) : reject(new Error('Plotly did not load')));
+        script.onerror = () => {
+          plotlyLoading = null;
+          script.remove();
+          reject(new Error('Plotly could not be loaded'));
+        };
+        document.head.append(script);
+      });
+      return plotlyLoading;
+    }
+
+    /** Groups the skills scanned: the map above, then each group, its label and colour, then the skills in none. */
+    function showClusters() {
+      const result = SkillClusters.cluster(scanned.map(({ skill }) => skill));
+      const cards = scanned.map(({ skill, repository }) => skillItem(skill, repository, true));
+      const colors = scanned.map(() => OTHER_COLOR);
+      const section = (title, color, members) => {
+        const group = element('section', 'repository cluster');
+        const head = element('div', 'repository-head');
+        const heading = element('h2');
+        const swatch = element('span', 'swatch');
+        swatch.style.background = color;
+        swatch.style.color = color;
+        swatch.setAttribute('aria-hidden', 'true');
+        heading.append(swatch, element('span', 'label', title), element('span', 'count', ` · ${plural(members.length, 'skill', 'skills')}`));
+        head.append(heading);
+        const list = element('ul', 'skills');
+        for (const i of members) {
+          colors[i] = color;
+          list.append(cards[i]);
+        }
+        group.append(head, list);
+        return group;
+      };
+      const groups = result.groups.map((group, index) => section(group.label.join(' · '), PALETTE[index % PALETTE.length], group.members));
+      if (result.others.length) groups.push(section(result.groups.length ? 'Other skills' : 'No similar skills', OTHER_COLOR, result.others));
+      clusterGroups.replaceChildren(...groups);
+      clusterNote.textContent = `${plural(result.groups.length, 'group', 'groups')} of similar skills` +
+        (result.others.length ? `, ${plural(result.others.length, 'skill', 'skills')} in none` : '') +
+        ': by the words of their names and descriptions. Hover a point on the map to see its skill, click it to find it below.';
+      clustered = { result, cards, colors };
+      clusterButton.setAttribute('aria-pressed', 'true');
+      clusterView.hidden = false;
+      skillList.hidden = true;
+      repositoryList.hidden = true;
+      applyFilter();
+    }
+
+    /** Back to the list, each repository's skills. */
+    function hideClusters() {
+      clustered = null;
+      clusterButton.setAttribute('aria-pressed', 'false');
+      clusterView.hidden = true;
+      skillList.hidden = false;
+      repositoryList.hidden = false;
+      if (window.Plotly) window.Plotly.purge(clusterMap);
+      delete clusterMap.dataset.picking;
+      clusterMap.replaceChildren();
+      clusterGroups.replaceChildren();
+    }
+
+    /** The map: a point for each skill the filter shows, where its words put it, in its group's colour. One drawing
+     * at a time, in order: typing in the filter asks for one a key. */
+    let drawing = Promise.resolve();
+    function drawMap() {
+      const shown = clustered;
+      drawing = drawing.then(() => drawMapOf(shown)).catch((error) => console.error(error));
+      return drawing;
+    }
+
+    async function drawMapOf(shown) {
+      if (shown !== clustered) return;
+      let Plotly;
+      try {
+        Plotly = await loadPlotly();
+      } catch (error) {
+        if (shown === clustered) clusterMap.replaceChildren(element('p', 'problem', `The map could not be drawn: ${error.message}. The groups are below.`));
+        return;
+      }
+      if (shown !== clustered) return; // pressed again, or another scan, while Plotly loaded
+      const { result, cards, colors } = shown;
+      const style = getComputedStyle(document.documentElement);
+      const css = (name) => style.getPropertyValue(name).trim();
+      const visible = (i) => !cards[i].hidden;
+      const trace = (name, color, members) => {
+        const indices = members.filter(visible);
+        return {
+          type: 'scatter',
+          mode: indices.length <= 40 ? 'markers+text' : 'markers',
+          name,
+          x: indices.map((i) => result.points[i][0]),
+          y: indices.map((i) => result.points[i][1]),
+          text: indices.map((i) => scanned[i].skill.name),
+          customdata: indices.map((i) => [i, scanned[i].repository.id, scanned[i].skill.summary || '']),
+          hovertemplate: '<b>%{text}</b><br>%{customdata[1]}<br>%{customdata[2]}<extra>%{fullData.name}</extra>',
+          textposition: 'top center',
+          cliponaxis: false,
+          textfont: { size: 11, color: css('--muted') },
+          marker: { size: 12, color, opacity: 0.9, line: { width: 1.5, color: css('--surface') } },
+        };
+      };
+      const data = result.groups.map((group, index) => trace(group.label.join(' · '), colors[group.members[0]], group.members));
+      if (result.others.length) data.push(trace('Other skills', OTHER_COLOR, result.others));
+      const axis = { showticklabels: false, zeroline: false, showgrid: true, gridcolor: css('--border'), showline: false, ticks: '', fixedrange: false };
+      // Room around the points for their names: every skill's, not only the ones shown, so the map stays put.
+      const range = (c, pad) => {
+        const values = result.points.map((point) => point[c]);
+        const low = Math.min(...values);
+        const high = Math.max(...values);
+        const room = (high - low || 1) * pad;
+        return [low - room, high + room];
+      };
+      const layout = {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { family: getComputedStyle(document.body).fontFamily, color: css('--text'), size: 12 },
+        margin: { l: 16, r: 16, t: 16, b: 16 },
+        xaxis: { ...axis, range: range(0, 0.18) },
+        yaxis: { ...axis, range: range(1, 0.14) },
+        hovermode: 'closest',
+        hoverlabel: { font: { family: getComputedStyle(document.body).fontFamily } },
+        legend: { orientation: 'v', x: 1, xanchor: 'right', y: 1, bgcolor: css('--surface'), bordercolor: css('--border'), borderwidth: 1 },
+        showlegend: true,
+      };
+      clusterMap.querySelector(':scope > .problem')?.remove();
+      await Plotly.react(clusterMap, data, layout, { displayModeBar: false, responsive: true });
+      if (typeof clusterMap.on === 'function' && clusterMap.dataset.picking === undefined) {
+        clusterMap.dataset.picking = '';
+        clusterMap.on('plotly_click', (event) => pick(event.points[0].customdata[0]));
+      }
+    }
+
+    /** A point clicked: its skill's card, scrolled to and lit up. */
+    function pick(index) {
+      if (!clustered) return;
+      const card = clustered.cards[index];
+      for (const other of clustered.cards) other.classList.remove('picked');
+      card.classList.add('picked');
+      card.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      card.querySelector('.name').focus({ preventScroll: true });
+    }
+
     async function scan(repo) {
       const id = ++current;
       reset();
       button.disabled = true;
+      clusterButton.disabled = true;
       loading.hidden = false;
       status.className = 'idle';
       status.replaceChildren(`Scanning ${repo}…`);
@@ -440,12 +648,14 @@
       } finally {
         if (id === current) {
           button.disabled = false;
+          clusterButton.disabled = false;
           loading.hidden = true;
         }
       }
     }
 
     filterInput.addEventListener('input', applyFilter);
+    clusterButton.addEventListener('click', () => (clustered ? hideClusters() : showClusters()));
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();

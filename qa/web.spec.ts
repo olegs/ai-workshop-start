@@ -110,3 +110,52 @@ test.describe('filtering the skills of the organization JetBrains', () => {
     await matchesScreenshot(page, 'filter-non-existing-name');
   });
 });
+
+test.describe('clustering the skills of the organization JetBrains', () => {
+  const groups = (page: Page) => page.locator('#cluster-groups .cluster:visible h2');
+  const points = (page: Page) => page.locator('#cluster-map .scatterlayer .point');
+
+  test.beforeEach(async ({ page }) => {
+    await open(page);
+    await scan(page, 'JetBrains');
+    await page.locator('#cluster').click();
+    await expect(page.locator('#cluster-map .main-svg').first()).toBeVisible();
+  });
+
+  test('Cluster groups similar skills: the map, a section for each group, the rest last', async ({ page }) => {
+    await expect(page.locator('#cluster')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#cluster-note')).toContainText('2 groups of similar skills, 4 skills in none');
+    await expect(groups(page)).toHaveText(['koog · agent · 3 skills', 'gradle · build · plugin · 3 skills', 'Other skills · 4 skills']);
+    await expect(points(page)).toHaveCount(10);
+    await expect(page.locator('#repositories')).toBeHidden();
+    await matchesScreenshot(page, 'cluster-groups');
+  });
+
+  test('the filter narrows the groups and the map', async ({ page }) => {
+    await filter(page, 'koog');
+    await expect(groups(page)).toHaveText(['koog · agent · 3 skills']);
+    await expect(points(page)).toHaveCount(3);
+    await expect(page.locator('#filter-note')).toHaveText('3 of 10 skills match');
+    await matchesScreenshot(page, 'cluster-filter');
+  });
+
+  test('a point on the map: hovered, its skill; clicked, its card lit up; Cluster again, the list', async ({ page }) => {
+    // Plotly's drag layer lies over its points: the mouse goes where the point is, as a person's does.
+    await page.locator('#cluster-map').scrollIntoViewIfNeeded();
+    const box = (await page.locator('#cluster-map .scatterlayer .trace').nth(1).locator('.point').last().boundingBox())!;
+    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+    await page.mouse.move(x, y);
+    await expect(page.locator('#cluster-map .hovertext')).toContainText('mps-build');
+    await expect(page.locator('#cluster-map .hovertext')).toContainText('JetBrains/MPS');
+    await page.mouse.click(x, y);
+    await expect(page.locator('#cluster-groups .skill.picked .name')).toHaveText('mps-build');
+    await expect(page.locator('#cluster-groups .skill.picked .name')).toBeFocused();
+    await page.mouse.move(0, 0);
+    await expect(page.locator('#cluster-map .hovertext')).toHaveCount(0);
+    await matchesScreenshot(page, 'cluster-picked');
+    await page.locator('#cluster').click();
+    await expect(page.locator('#clusters')).toBeHidden();
+    await expect(repositories(page)).toHaveText(['JetBrains/koog', 'JetBrains/kotlin', 'JetBrains/MPS']);
+    await expect(skills(page)).toHaveCount(10);
+  });
+});

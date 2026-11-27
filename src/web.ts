@@ -2,6 +2,8 @@
 // GitHub repositories only: a web page must not read the server's own directories.
 import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
+import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { firstSentence } from './commands.ts';
 import { createCache, DAY, LIMIT } from './core/cache.ts';
 import { AtlasError } from './core/errors.ts';
@@ -37,6 +39,19 @@ export type OrganizationLine =
   | { error: string };
 
 const PAGE = readFileSync(new URL('./web/index.html', import.meta.url), 'utf8');
+/** The skill clusters, computed in the page: a script it loads from the server. */
+const CLUSTER_SCRIPT = readFileSync(new URL('./web/cluster.js', import.meta.url), 'utf8');
+
+/** Plotly, which draws the map of the clusters: served from its package, not fetched from elsewhere; read and
+ * compressed the first time the page asks for it, as the page asks only when the skills are clustered. */
+let plotly: { plain: Buffer; gzip: Buffer } | undefined;
+function plotlyScript() {
+  if (!plotly) {
+    const plain = readFileSync(fileURLToPath(import.meta.resolve('plotly.js-dist-min')));
+    plotly = { plain, gzip: gzipSync(plain) };
+  }
+  return plotly;
+}
 
 /** `owner/repo` is shorthand for `https://github.com/owner/repo`, and `owner` for `https://github.com/owner`. */
 export function toGitHubUrl(input: string): string {
@@ -80,6 +95,19 @@ export function createWebServer(options: WebOptions): Server {
 
     if (request.method !== 'GET') return json(405, { error: 'Method not allowed' });
     if (url.pathname === '/') return send(200, 'text/html', PAGE);
+    if (url.pathname === '/cluster.js') return send(200, 'text/javascript', CLUSTER_SCRIPT);
+    if (url.pathname === '/plotly.min.js') {
+      // The same for a day: 4.8 MB, 1.5 MB compressed, fetched again only when the package changes.
+      const script = plotlyScript();
+      const gzip = /\bgzip\b/.test(String(request.headers['accept-encoding'] ?? ''));
+      response.writeHead(200, {
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Cache-Control': 'public, max-age=86400',
+        Vary: 'Accept-Encoding',
+        ...(gzip ? { 'Content-Encoding': 'gzip' } : {}),
+      });
+      return response.end(gzip ? script.gzip : script.plain);
+    }
     if (url.pathname !== '/api/scan') return json(404, { error: 'Not found' });
 
     const repo = url.searchParams.get('repo')?.trim() ?? '';

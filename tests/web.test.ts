@@ -2,6 +2,8 @@
 // with GitHub answering from the recording in tests/helpers.ts.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer, get, type IncomingHttpHeaders } from 'node:http';
+import { gunzipSync } from 'node:zlib';
 import type { AddressInfo } from 'node:net';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +12,7 @@ import { replay } from '../src/core/replay.ts';
 import { createWebServer, toGitHubUrl } from '../src/web.ts';
 import type { Fetch } from '../src/core/github.ts';
 import { commitIn, EXAMPLE_COMMIT, github } from './helpers.ts';
+import { mockGitHub } from '../mock/github.ts';
 
 const LINK = `https://github.com/JetBrains/example/blob/${EXAMPLE_COMMIT}/.claude/skills/commits/SKILL.md`;
 
@@ -150,22 +153,36 @@ test('unknown paths are 404', async () => {
 });
 
 /** The page as the server serves it, its own script running, its fetch going to the server. */
+/** What the page asked Plotly to draw: each call's traces and layout, the latest last. */
+type Drawn = { data: { name: string; text: string[]; x: number[]; y: number[]; customdata: [number, string, string][]; marker: { color: string } }[]; layout: Record<string, unknown> };
+
 async function openPage(path = '/', server = base) {
+  const plotted: Drawn[] = [];
   const dom = new JSDOM(await (await fetch(server)).text(), {
     url: new URL(path, server).href,
     runScripts: 'dangerously',
+    // The page's own scripts from the server, /cluster.js too, as a browser loads them.
+    resources: 'usable',
     beforeParse: (window) => {
       window.fetch = (input: string | URL | Request, init?: RequestInit) => fetch(new URL(String(input), server), init);
+      // Plotly draws nothing in jsdom: what it is asked to draw is recorded instead. Real drawing: the QA tests.
+      Object.assign(window, {
+        Plotly: {
+          react: async (_element: Element, data: Drawn['data'], layout: Drawn['layout']) => void plotted.push(structuredClone({ data, layout })),
+          purge: () => {},
+        },
+      });
     },
   });
   const document = dom.window.document;
+  if (document.readyState !== 'complete') await new Promise((resolve) => dom.window.addEventListener('load', resolve));
   const scan = async (repo: string) => {
     (document.getElementById('repo') as HTMLInputElement).value = repo;
     (document.getElementById('scan') as HTMLButtonElement).click();
     // The button is disabled while the scan runs.
     await waitFor(() => !(document.getElementById('scan') as HTMLButtonElement).disabled);
   };
-  return { document, window: dom.window, scan, close: () => dom.window.close() };
+  return { document, window: dom.window, scan, plotted, close: () => dom.window.close() };
 }
 
 async function waitFor(condition: () => boolean) {
@@ -680,4 +697,220 @@ test('the page: a neon sunset look, light and dark, drawn in the page with nothi
   // Nothing fetched for the look: no external stylesheet, font or image.
   assert.doesNotMatch(html, /@import|@font-face|url\(\s*['"]?https?:/);
   assert.equal(document.querySelectorAll('link[rel="stylesheet"], img').length, 0);
+});
+
+// spec/web.md, "Cluster": the skills grouped by what they say, over the mock data (tests/cluster.test.ts: how).
+/** A server over the mock data for the time of `run`: JetBrains, its 3 repositories, 10 skills. */
+async function withMock(run: (base: string) => Promise<void>, wrap?: (base: string) => ReturnType<typeof createServer>) {
+  const mock = createWebServer({ fetch: mockGitHub() });
+  await new Promise<void>((resolve) => mock.listen(0, '127.0.0.1', resolve));
+  const mockBase = `http://127.0.0.1:${(mock.address() as AddressInfo).port}`;
+  const front = wrap?.(mockBase);
+  if (front) await new Promise<void>((resolve) => front.listen(0, '127.0.0.1', resolve));
+  try {
+    await run(front ? `http://127.0.0.1:${(front.address() as AddressInfo).port}` : mockBase);
+  } finally {
+    front?.close();
+    mock.close();
+  }
+}
+
+const clusterButton = (document: Document) => document.getElementById('cluster') as HTMLButtonElement;
+/** Each group shown: its heading, then its skills' names and repositories. */
+const groups = (document: Document) =>
+  [...document.querySelectorAll<HTMLElement>('#cluster-groups .cluster')].filter((group) => !group.hidden).map((group) => [
+    group.querySelector('h2')!.textContent,
+    ...[...group.querySelectorAll<HTMLElement>('.skill')].filter((skill) => !skill.hidden).map((skill) => `${skill.querySelector('.name')!.textContent} @ ${skill.querySelector('.repository-name')!.textContent}`),
+  ]);
+const ALL_GROUPS = [
+  ['koog · agent · 3 skills', 'koog-agent @ JetBrains/koog', 'koog-docs @ JetBrains/koog', 'koog-tests @ JetBrains/koog'],
+  ['gradle · build · plugin · 3 skills', 'build-tools-bump-gradle-api @ JetBrains/kotlin', 'gradle-plugin-tests @ JetBrains/kotlin', 'mps-build @ JetBrains/MPS'],
+  ['Other skills · 4 skills', 'compiler-test-data @ JetBrains/kotlin', 'release-notes @ JetBrains/kotlin', 'stdlib-api-review @ JetBrains/kotlin', 'language-design @ JetBrains/MPS'],
+];
+
+test('in the page: the Cluster button appears next to the filter once there are skills', async () => {
+  const page = await openPage();
+  try {
+    const { document } = page;
+    const button = clusterButton(document);
+    assert.equal(button.hidden, true, 'nothing to cluster yet');
+    assert.equal(button.textContent, 'Cluster');
+    assert.equal(button.getAttribute('aria-pressed'), 'false');
+    assert.equal(button.parentElement, document.getElementById('filter-box')!.parentElement, 'next to the filter');
+    await page.scan('JetBrains/empty');
+    assert.equal(button.hidden, true, 'no skills, nothing to cluster');
+    await page.scan('JetBrains/copies');
+    assert.equal(button.hidden, false);
+    assert.equal(button.disabled, false);
+  } finally {
+    page.close();
+  }
+});
+
+test('in the page: Cluster groups the skills of every repository, a section for each group, the rest last', async () => {
+  await withMock(async (mockBase) => {
+    const page = await openPage('/', mockBase);
+    try {
+      const { document } = page;
+      await page.scan('JetBrains');
+      clusterButton(document).click();
+      assert.equal(clusterButton(document).getAttribute('aria-pressed'), 'true');
+      assert.equal(document.getElementById('clusters')!.hidden, false);
+      assert.equal(document.getElementById('repositories')!.hidden, true, 'the list gives way to the groups');
+      assert.equal(document.getElementById('cluster-note')!.textContent!.split(':')[0], '2 groups of similar skills, 4 skills in none');
+      assert.deepEqual(groups(document), ALL_GROUPS);
+      // Each skill once, its card as in the list, its repository named.
+      const cards = [...document.querySelectorAll('#cluster-groups .skill')];
+      assert.equal(cards.length, 10);
+      const mpsBuild = cards.find((card) => card.querySelector('.name')!.textContent === 'mps-build')!;
+      assert.equal((mpsBuild.querySelector('.name') as HTMLAnchorElement).href, 'https://github.com/JetBrains/MPS/blob/b2c3d4e5f60718293a4b5c6d7e8f9012345678a1/.claude/skills/mps-build/SKILL.md');
+      assert.equal(mpsBuild.querySelector('.meta')!.textContent, 'JetBrains/MPS .claude/skills/mps-build/SKILL.md');
+      // Each group's dot in its colour, the colour of its points on the map.
+      const swatches = [...document.querySelectorAll<HTMLElement>('#cluster-groups .swatch')].map((swatch) => swatch.style.background);
+      assert.equal(new Set(swatches).size, 3);
+      // Pressed again: the list as it was.
+      clusterButton(document).click();
+      assert.equal(clusterButton(document).getAttribute('aria-pressed'), 'false');
+      assert.equal(document.getElementById('clusters')!.hidden, true);
+      assert.equal(document.getElementById('repositories')!.hidden, false);
+      assert.equal(document.querySelectorAll('#cluster-groups .skill').length, 0);
+      assert.deepEqual(shownSections(document), ['JetBrains/koog', 'JetBrains/kotlin', 'JetBrains/MPS']);
+    } finally {
+      page.close();
+    }
+  });
+});
+
+test('in the page: the map, drawn by Plotly: a point for each skill, a trace for each group in its colour', async () => {
+  await withMock(async (mockBase) => {
+    const page = await openPage('/', mockBase);
+    try {
+      const { document } = page;
+      await page.scan('JetBrains');
+      clusterButton(document).click();
+      await waitFor(() => page.plotted.length > 0);
+      const { data } = page.plotted.at(-1)!;
+      assert.deepEqual(
+        data.map((trace) => [trace.name, trace.text]),
+        [
+          ['koog · agent', ['koog-agent', 'koog-docs', 'koog-tests']],
+          ['gradle · build · plugin', ['build-tools-bump-gradle-api', 'gradle-plugin-tests', 'mps-build']],
+          ['Other skills', ['compiler-test-data', 'release-notes', 'stdlib-api-review', 'language-design']],
+        ],
+      );
+      const swatches = [...document.querySelectorAll<HTMLElement>('#cluster-groups .swatch')].map((swatch) => swatch.style.background);
+      const toRgb = (color: string) => { const probe = document.createElement('i'); probe.style.background = color; return probe.style.background; };
+      assert.deepEqual(data.map((trace) => toRgb(trace.marker.color)), swatches);
+      // Hovering a point: its name, repository and first sentence.
+      assert.deepEqual(data[0].customdata[0].slice(1), ['JetBrains/koog', 'Creates a Koog AI agent with its tools and a strategy graph.']);
+      for (const trace of data) for (const value of [...trace.x, ...trace.y]) assert.ok(Number.isFinite(value));
+    } finally {
+      page.close();
+    }
+  });
+});
+
+test('in the page: the filter still applies to the groups and the map; a group with no match is hidden', async () => {
+  await withMock(async (mockBase) => {
+    const page = await openPage('/', mockBase);
+    try {
+      const { document } = page;
+      await page.scan('JetBrains');
+      clusterButton(document).click();
+      filter(page, 'gradle');
+      assert.deepEqual(groups(document), [
+        ['gradle · build · plugin · 3 skills', 'build-tools-bump-gradle-api @ JetBrains/kotlin', 'gradle-plugin-tests @ JetBrains/kotlin', 'mps-build @ JetBrains/MPS'],
+      ]);
+      assert.equal(document.getElementById('filter-note')!.textContent, '3 of 10 skills match');
+      await waitFor(() => page.plotted.at(-1)?.data.flatMap((trace) => trace.text).length === 3);
+      assert.deepEqual(page.plotted.at(-1)!.data.map((trace) => trace.text.length), [0, 3, 0]);
+      // The groups stay as they were made: a word that matches in two groups shows both.
+      filter(page, 'tests');
+      assert.deepEqual(groups(document).map((group) => group[0]), ['koog · agent · 3 skills', 'gradle · build · plugin · 3 skills']);
+      filter(page, '');
+      assert.deepEqual(groups(document), ALL_GROUPS);
+    } finally {
+      page.close();
+    }
+  });
+});
+
+test('in the page: a new scan goes back to the list; the button waits while a scan runs', async () => {
+  await withMock(async (mockBase) => {
+    const page = await openPage('/', mockBase);
+    try {
+      const { document } = page;
+      await page.scan('JetBrains');
+      clusterButton(document).click();
+      const scanning = page.scan('JetBrains/koog');
+      assert.equal(clusterButton(document).disabled, true, 'waits while the scan runs');
+      assert.equal(document.getElementById('clusters')!.hidden, true);
+      await scanning;
+      assert.equal(clusterButton(document).disabled, false);
+      assert.equal(clusterButton(document).getAttribute('aria-pressed'), 'false');
+      assert.equal(document.querySelectorAll('#skills .skill').length, 3);
+      // The new scan's skills, not the last one's.
+      clusterButton(document).click();
+      assert.deepEqual(groups(document), [ALL_GROUPS[0]]);
+    } finally {
+      page.close();
+    }
+  });
+});
+
+test('in the page: Plotly cannot be loaded → a note where the map would be, the groups below', async () => {
+  // In front of the mock server, one that answers 503 for Plotly.
+  const blocking = (target: string) =>
+    createServer(async (request, response) => {
+      if (request.url === '/plotly.min.js') return response.writeHead(503).end();
+      const answer = await fetch(new URL(request.url!, target));
+      response.writeHead(answer.status, { 'Content-Type': answer.headers.get('content-type') ?? 'text/plain' });
+      response.end(Buffer.from(await answer.arrayBuffer()));
+    });
+  await withMock(async (front) => {
+    const page = await openPage('/', front);
+    try {
+      const { document, window } = page;
+      Object.assign(window, { Plotly: undefined });
+      await page.scan('JetBrains');
+      clusterButton(document).click();
+      await waitFor(() => document.querySelector('#cluster-map .problem') !== null);
+      assert.equal(document.querySelector('#cluster-map .problem')!.textContent, 'The map could not be drawn: Plotly could not be loaded. The groups are below.');
+      assert.deepEqual(groups(document), ALL_GROUPS);
+    } finally {
+      page.close();
+    }
+  }, blocking);
+});
+
+test('the server: the page loads its scripts from it, Plotly from its package, compressed, kept for a day', async () => {
+  const html = await (await fetch(base)).text();
+  const { document } = new JSDOM(html).window;
+  assert.deepEqual([...document.querySelectorAll('script[src]')].map((script) => script.getAttribute('src')), ['/cluster.js']);
+  assert.doesNotMatch(html, /<script[^>]+src=["']?https?:/, 'no script from another site');
+  const cluster = await fetch(`${base}/cluster.js`);
+  assert.equal(cluster.status, 200);
+  assert.equal(cluster.headers.get('content-type'), 'text/javascript; charset=utf-8');
+  assert.match(await cluster.text(), /^var SkillClusters = /m);
+
+  // node:http, not fetch: fetch would decompress it out of sight.
+  const plotly = (encoding: string) =>
+    new Promise<{ status: number; headers: IncomingHttpHeaders; body: Buffer }>((resolve, reject) => {
+      get(`${base}/plotly.min.js`, { headers: { 'accept-encoding': encoding } }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => resolve({ status: response.statusCode!, headers: response.headers, body: Buffer.concat(chunks) }));
+      }).on('error', reject);
+    });
+  const plain = await plotly('identity');
+  const gzip = await plotly('gzip, deflate, br');
+  assert.equal(gzip.status, 200);
+  assert.equal(gzip.headers['content-encoding'], 'gzip');
+  assert.ok(gzip.body.length < plain.body.length / 2, 'compressed');
+  assert.deepEqual(gunzipSync(gzip.body), plain.body);
+  assert.equal(plain.status, 200);
+  assert.equal(plain.headers['content-type'], 'text/javascript; charset=utf-8');
+  assert.equal(plain.headers['content-encoding'], undefined);
+  assert.equal(plain.headers['cache-control'], 'public, max-age=86400');
+  assert.match(plain.body.subarray(0, 400).toString(), /plotly\.js v\d/);
 });

@@ -19,6 +19,7 @@
     "qa": "playwright test -c qa"
   },
   "dependencies": {
+    "plotly.js-dist-min": "^4.3.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {

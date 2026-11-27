@@ -20,3 +20,7 @@ UI tests of the web view (spec/web.md), as a person sees it: **Playwright** test
 - **Filter**, after scanning `JetBrains`: **empty**, typed then cleared, every skill and no note; an **existing name**,
   `mps-build`: that skill alone, `1 of 10 skills match`, only its repository; a **non-existing name**: no skills,
   `No skills match “…”`, no repository
+- **Cluster**, after scanning `JetBrains`: **pressed**, `2 groups of similar skills, 4 skills in none`, the groups
+  `koog · agent`, `gradle · build · plugin`, then `Other skills`, the map with 10 points, the list hidden; with the
+  **filter** `koog`: only its group, 3 points, `3 of 10 skills match`; a **point** hovered: its skill's name and
+  repository; clicked: its card lit up and focused; pressed again: the list, its 3 repositories and 10 skills

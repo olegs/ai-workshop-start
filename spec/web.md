@@ -11,6 +11,24 @@
   - `k of N skills match`, or `No skills match "…"`; an organization's repository with no match is hidden,
     one that could not be scanned stays while its name matches
   - It filters the repositories still coming in too; a new scan empties it
+- A **Cluster** button next to the filter, once there are skills: it groups the skills scanned by what they say,
+  computed *in the page*: nothing fetched from GitHub, no external service
+  - Each skill a **TF-IDF** vector of its words: its name's, counted twice, and its description's; case aside, no
+    stopwords or numbers alone, a plural counted as its singular. Two groups merge while the **average cosine
+    similarity** of their skills is at least *0.12* (average-linkage); a skill like no other is in no group
+  - `N groups of similar skills, M skills in none`, then a **map**, drawn by **Plotly**: each skill a point, its name
+    next to it while 40 or fewer are shown, where the first two principal components of the vectors put it; each group
+    in its colour, the skills in none grey, a legend; hovering a point shows its name, repository and first sentence;
+    clicking it scrolls to its card and lights it up
+  - Then a section for each group, the largest first: a dot of its colour, its **label**, the 3 words its skills share
+    that weigh most in them, `word · word · word · N skills`, and its skills' cards, each with its repository's name;
+    last, `Other skills`, those in no group (`No similar skills` when there is no group)
+  - Each skill once; the same skills give the same groups and the same map
+  - The filter still applies: only the skills that match, on the map and in the groups; a group with none is hidden;
+    the groups stay as they were made
+  - Pressed again, or a new scan: back to the list; it waits while a scan runs
+  - Plotly loaded from the server, `/plotly.min.js`, only the first time the map is drawn; if it cannot be loaded, a note
+    where the map would be, the groups below
 - `/?repo=<owner/repo>` scans at once; a scan puts the repository in the address: a link to share
 - Example repositories to try, one click each
 - An organization: `owner · N repositories · M skills` linked, then a section for each repository *as it is
@@ -37,6 +55,9 @@
   `{ error }` last if the scan had to stop. Unreachable organization → *502*, JSON, before any line
 - **GitHub only**: a local directory is rejected, *400* — the page must not read the server's disk
 - Empty input → *400*; unreachable repository → the CLI's clear message, *502*
+
+The page's scripts: `GET /cluster.js`, the clusters; `GET /plotly.min.js`, Plotly from its npm package
+(`plotly.js-dist-min`), not from a CDN, compressed when the browser accepts gzip, kept by the browser for a day
 ## Cache
 What the server fetched from GitHub is kept **24 hours**, in memory: the same scan again fetches nothing
 - A repository's result, an organization's list of repositories; each repository of an organization as if
