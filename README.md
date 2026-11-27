@@ -44,5 +44,8 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 - [skills/human.md](skills/human.md): human-in-the-loop: when an issue is vague or the feature is big, asks for
   clarification or confirmation of the plan in the Slack channel `ai-workshop-munich-2026-os` (with `SLACK_BOT_TOKEN`),
   waits up to 10 minutes for a reply in the thread, and asks on the issue instead when no one answers.
+- [skills/red-agent.md](skills/red-agent.md): a QA engineer hunting for bugs in the CLI and the web view, at most 5
+  attempts; makes each bug granular with the shortest way to reproduce it, scores them, files the most important one not
+  among the open issues, and announces it in the Slack channel `ai-workshop-munich-2026-os`.
 - [skills/changes.md](skills/changes.md): logs each meaningful change in [CHANGES.md](CHANGES.md), not quick fixes or
   small refactorings.
