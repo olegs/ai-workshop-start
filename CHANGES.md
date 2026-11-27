@@ -3,6 +3,8 @@
 Meaningful changes, newest first; how to log one: [.agents/skills/changes/SKILL.md](.agents/skills/changes/SKILL.md).
 
 ## 2026-11-27
+- The CLI and the web view no longer cut a description's first sentence at an abbreviation such as `e.g.` or `i.e.`
+  (#34).
 - The red agent posts a status update in Slack after every hunt, even when it finds no bug or every bug is already
   open, so a quiet run is told apart from one that did not run.
 - The six repository automations are discoverable as standard project skills under `.agents/skills/`.

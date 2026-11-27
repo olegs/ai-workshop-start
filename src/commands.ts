@@ -76,7 +76,24 @@ function printRepository(repository: Repository, skills: Skill[], { print }: Con
   }
 }
 
+/** Abbreviations whose `.` never ends a sentence, even before a capital: "e.g. JSON". */
+const ABBREVIATIONS = new Set(['e.g', 'i.e', 'cf', 'vs', 'viz', 'a.k.a', 'approx', 'incl', 'esp', 'resp', 'etc']);
+
+/**
+ * The text up to the first `.`, `!` or `?` before a space or the end that ends a sentence: a `.` after an abbreviation
+ * ("e.g.", "i.e.", "vs.") or before a lowercase word or a digit ("approx. 5") does not.
+ */
 export function firstSentence(text: string): string {
   const line = text.replace(/\s+/g, ' ').trim();
-  return /^.*?[.!?](?=\s|$)/.exec(line)?.[0] ?? line;
+  for (const end of line.matchAll(/[.!?](?=\s|$)/g)) {
+    const at = end.index + 1;
+    if (end[0] === '.' && at < line.length) {
+      const word = /(?:^|[\s(])([^\s(]*)$/.exec(line.slice(0, end.index))![1].toLowerCase();
+      const next = line.slice(at + 1);
+      if (ABBREVIATIONS.has(word) && !(word === 'etc' && /^\p{Lu}/u.test(next))) continue;
+      if (/^[\p{Ll}\d]/u.test(next)) continue;
+    }
+    return line.slice(0, at);
+  }
+  return line;
 }

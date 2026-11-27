@@ -58,6 +58,7 @@ const listed = (...ids: string[]) => ids.map((id) => ({ full_name: id, default_b
  * that resets in an hour.
  * Bare, an organization with no skills at all: Bare/gone's tree is too large, code search lists a SKILL.md
  * that is not there at the scanned commit, a warning; Bare/plain has none.
+ * Abbrev, an organization whose one repository's skills have abbreviations in their first sentence.
  * nobody: not on GitHub.
  */
 const ORGANIZATIONS: Recording = {
@@ -102,6 +103,13 @@ const ORGANIZATIONS: Recording = {
   },
   [`https://raw.githubusercontent.com/Bare/gone/${commitIn('Bare/gone')}/.claude/skills/gone/SKILL.md`]: { status: 404, body: '404: Not Found' },
   ...repository('Bare/plain', { 'README.md': '# plain\n' }),
+
+  [`${API}/users/Abbrev`]: { status: 200, body: { login: 'Abbrev', type: 'Organization' } },
+  [`${API}/orgs/Abbrev/repos?per_page=100&page=1`]: { status: 200, body: listed('Abbrev/tools') },
+  ...repository('Abbrev/tools', {
+    '.claude/skills/fmt/SKILL.md': skillText('fmt', 'Formats files, e.g. JSON and YAML, before a commit.'),
+    '.claude/skills/test/SKILL.md': skillText('test', 'Runs tests, i.e. the unit suite. Then lints.'),
+  }),
 
   [`${API}/users/nobody`]: { status: 404, body: { message: 'Not Found' } },
 };

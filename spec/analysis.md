@@ -53,6 +53,9 @@ The same skill under another agent's folder: one skill, listed `also in <paths>`
 - The link pins the *scanned commit*
 - Malformed front matter → a *warning*, the scan goes on
 - No front matter or no description → the name alone
+- The *first sentence* of a description, as the CLI and the web view show it: up to the first `.`, `!` or `?` before a
+  space or the end; not a `.` after an abbreviation (`e.g.`, `i.e.`, `cf.`, `vs.`, `viz.`, `a.k.a.`, `approx.`, `incl.`,
+  `esp.`, `resp.`; `etc.` unless a capital follows) or before a lowercase word or a digit
 - Tree too large for one answer, no `GITHUB_TOKEN` → only the root's skill folders, a *warning*
 - Unreachable repository → a clear message, exit code 1
 - An empty repository, no commits yet → no skills, not an error
