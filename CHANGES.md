@@ -3,6 +3,8 @@
 Meaningful changes, newest first; how to log one: [.agents/skills/changes/SKILL.md](.agents/skills/changes/SKILL.md).
 
 ## 2026-11-27
+- The web view keeps what it scanned in `~/.skill-atlas/cache.json`, so a restart no longer forgets it: a
+  repository or an organization scanned within 24 hours is not fetched from GitHub again (#36).
 - The CLI and the web view no longer cut a description's first sentence at an abbreviation such as `e.g.` or `i.e.`
   (#34).
 - A skill, [.agents/skills/status-update/SKILL.md](.agents/skills/status-update/SKILL.md), posts a weekly status update in Slack: a summary

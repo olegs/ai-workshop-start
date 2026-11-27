@@ -59,13 +59,19 @@
 The page's scripts: `GET /cluster.js`, the clusters; `GET /plotly.min.js`, Plotly from its npm package
 (`plotly.js-dist-min`), not from a CDN, compressed when the browser accepts gzip, kept by the browser for a day
 ## Cache
-What the server fetched from GitHub is kept **24 hours**, in memory: the same scan again fetches nothing
+What the server fetched from GitHub is kept **24 hours**: the same scan again fetches nothing
 - A repository's result, an organization's list of repositories; each repository of an organization as if
   scanned alone: `owner/repo` after `owner` is not fetched again
 - Any way of naming it, case aside: `owner/repo`, its URL, `OWNER/Repo`
 - Asked for twice at once → fetched once
 - Only what was scanned: an unreachable repository, a repository that could not be scanned, a rate limit
   are asked for again the next time
-- After 24 hours GitHub is asked again; a restart forgets it all; the oldest go first past 20 000 entries,
+- After 24 hours GitHub is asked again; the oldest go first past 20 000 entries,
   each repository of an organization one: well above the largest organization, scanned again, fetches nothing
-- Nothing on disk
+- **Kept across runs**: `npm start` keeps it in `~/.skill-atlas/cache.json` too, so a restart forgets nothing:
+  what was scanned within 24 hours, before the restart, is not fetched again; after 24 hours it is
+  - Written shortly after each scan, and as the server stops (Ctrl-C too); readable by the user alone: with a
+    token, it lists private repositories
+  - Read as the server starts, the 20 000 newest still kept; a missing or broken file is an empty cache, replaced
+    by the next save; a directory that cannot be written: an error printed, the scans go on, kept in memory
+  - The mock server (`npm run mock`) and the tests keep it in memory only: each demo the same
