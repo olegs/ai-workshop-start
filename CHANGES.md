@@ -3,6 +3,8 @@
 Meaningful changes, newest first; how to log one: [.agents/skills/changes/SKILL.md](.agents/skills/changes/SKILL.md).
 
 ## 2026-11-27
+- The README has a table of the top 5 jobs to be done that Skill Atlas could solve, each with the features that
+  do it (#40).
 - The web view's cluster map agrees with the groups: each group's skills are drawn together, apart from the other
   groups, instead of mixed colours over each other when there are many groups; copies of a skill show side by side (#38).
 - The web view keeps what it scanned in `~/.skill-atlas/cache.json`, so a restart no longer forgets it: a
