@@ -47,5 +47,8 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 - [.agents/skills/red-agent/SKILL.md](.agents/skills/red-agent/SKILL.md): a QA engineer hunting for bugs in the CLI and the web view, at most 5
   attempts; makes each bug granular with the shortest way to reproduce it, scores them, files the most important one not
   among the open issues, and announces it in the Slack channel `ai-workshop-munich-2026-os`.
+- [.agents/skills/status-update/SKILL.md](.agents/skills/status-update/SKILL.md): a weekly status update: a summary of the last 7
+  days from [CHANGES.md](CHANGES.md), and a table of the issues closed and the Pull Requests merged, posted in the Slack
+  channel `ai-workshop-munich-2026-os`.
 - [.agents/skills/changes/SKILL.md](.agents/skills/changes/SKILL.md): logs each meaningful change in [CHANGES.md](CHANGES.md), not quick fixes or
   small refactorings.

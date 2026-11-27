@@ -14,13 +14,14 @@ A skill an agent loads when it works in the repository:
 - `<name>`: the skill's directory, *directly* in `<root>`
 - Names are exact, case-sensitive: `SKILL.md`, and each folder of `<root>`
 ### This repository's skills
-This repository's six automations are project skills at these paths:
+This repository's seven automations are project skills at these paths:
 - `.agents/skills/changes/SKILL.md`
 - `.agents/skills/code-review/SKILL.md`
 - `.agents/skills/human/SKILL.md`
 - `.agents/skills/issue-solve/SKILL.md`
 - `.agents/skills/qa/SKILL.md`
 - `.agents/skills/red-agent/SKILL.md`
+- `.agents/skills/status-update/SKILL.md`
 ### Not a project skill
 Ignored, *no warning*: a large repository has many.
 - A `SKILL.md` outside a skill folder: docs, test data, the repository root, a plugin's or a
