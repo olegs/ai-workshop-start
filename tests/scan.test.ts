@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import { openGitHub } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
+import { firstSentence } from '../src/commands.ts';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE } from './helpers.ts';
 
 const fixture = await atlas(['scan', FIXTURE]);
@@ -114,6 +115,7 @@ test('the first sentence does not end at an abbreviation: "e.g.", "i.e.", "vs.",
     compare: 'Compares A vs. B. Prints the diff.',
     retry: 'Retries approx. 5 times. Then fails.',
     list: 'Lists JSON, YAML, etc. Then stops.',
+    quote: 'Supports "e.g. JSON" input. Then more.',
   };
   for (const [name, description] of Object.entries(skills)) {
     mkdirSync(join(root, '.claude/skills', name), { recursive: true });
@@ -127,8 +129,17 @@ test('the first sentence does not end at an abbreviation: "e.g.", "i.e.", "vs.",
       'compare — Compares A vs. B.',
       'fmt — Formats files, e.g. JSON and YAML, before a commit.',
       'list — Lists JSON, YAML, etc.',
+      'quote — Supports "e.g. JSON" input.',
       'retry — Retries approx. 5 times.',
       'test — Runs tests, i.e. the unit suite.',
     ],
   );
+});
+
+test('the first sentence of a long description with many abbreviation-like "." takes linear time', () => {
+  // A third-party SKILL.md scanned in the web view must not block the server: 1 MB, well under a second.
+  const description = 'a. '.repeat(350_000);
+  const started = performance.now();
+  assert.equal(firstSentence(description), description.trim());
+  assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)} ms`);
 });
