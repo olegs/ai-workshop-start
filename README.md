@@ -32,6 +32,20 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 
   ![The web view scans the JetBrains organization over the mock data, then clusters its skills on a map](docs/demo.gif)
 
+## Jobs to be done
+
+The top 5 jobs Skill Atlas could be hired for, from what it does today: it finds the skills an agent loads, in one
+repository or across an organization, pins each to its commit, tells copies from diverged skills, filters them and
+groups those that say similar things.
+
+| # | When… | I want to… | So that… | How Skill Atlas does it |
+|---|---|---|---|---|
+| 1 | I start working in a repository where AI agents run | see every skill an agent loads there, with what it is for | I know what the agents can do, and do not write a skill that is already there | `./skill-atlas scan <repo>`, or the web view: each skill's name, first sentence and link, in any module of a monorepo |
+| 2 | I am about to write a new skill for my organization | find the skills other teams already have that do the same | I reuse or extend one instead of adding a duplicate | An organization's URL scans every repository; the filter finds a word in names, descriptions and repositories; **Cluster** groups similar skills on a map |
+| 3 | I keep the same skill in several agents' folders (`.agents/skills`, `.claude/skills`, `.github/skills`, `agent/skills`) | know which are exact copies and which have drifted apart | every agent follows the same instructions | A copy with the same bytes is one skill, `also in <paths>`; different bytes are two skills, each with its own link |
+| 4 | I own the agent setup of an organization (a platform, security or developer-experience lead) | an inventory of every instruction our agents follow, at a known commit | I can review, audit and standardize them, and see what changed later | Every repository scanned one by one, each link pinned to the scanned commit; the CLI's plain text output to keep or compare |
+| 5 | I look for good practice in well-known open-source repositories | browse their skills and share what I found with my team | we adopt automations proven elsewhere | Example repositories one click away; `/?repo=<owner/repo>` is a link to share; the groups' labels show what skills are about |
+
 ## Automations
 
 - [.agents/skills/issue-solve/SKILL.md](.agents/skills/issue-solve/SKILL.md): an issue labeled "Delegated to AI" gets a branch, a fix and a Pull
