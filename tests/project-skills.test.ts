@@ -32,12 +32,12 @@ async function scanFiles(name: string, files: Record<string, string>, links: Rec
   return { ...result, stdout: result.stdout.replaceAll(pathToFileURL(root).href, '<repo>') };
 }
 
-test('this repository: all six automations are discoverable project skills', async () => {
+test('this repository: all seven automations are discoverable project skills', async () => {
   const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
   const result = await atlas(['scan', root]);
   assert.equal(result.code, 0, result.stderr);
   const output = result.stdout.replaceAll(pathToFileURL(root).href, '<repo>');
-  assert.match(output, /^ai-workshop-start · 9 skills\n/);
+  assert.match(output, /^ai-workshop-start · 10 skills\n/);
   for (const [name, description] of [
     ['changes', 'Log meaningful changes in the change log, newest first and in plain words.'],
     ['code-review', 'Review pull requests with actionable inline findings and a clear verdict.'],
@@ -45,6 +45,7 @@ test('this repository: all six automations are discoverable project skills', asy
     ['issue-solve', 'Handle issues labeled Delegated to AI, implement fixes, and manage review loops.'],
     ['qa', 'Run and troubleshoot Playwright UI tests, maintain screenshots, and add tests for specification cases.'],
     ['red-agent', 'Hunt reproducible bugs in the CLI and web view, then file and notify about the highest-priority finding.'],
+    ['status-update', "Summarize the last week's updates, with a table of closed issues and merged pull requests, and post it in Slack."],
   ]) {
     assert.ok(output.includes(`${name} — ${description}\n  <repo>/.agents/skills/${name}/SKILL.md`));
   }
