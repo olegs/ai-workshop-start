@@ -23,6 +23,8 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.
+- [qa/](qa/): UI tests, Cucumber scenarios over the mock data, each page compared with its screenshot; `npm run qa`
+  ([spec/qa.md](spec/qa.md)).
 - [mock/](mock/README.md): mock GitHub data for demos; `npm run mock` serves the web view over it, `npm run demo`
   records [docs/demo.mp4](docs/demo.mp4), a 10-second demo of the web view, and its preview:
 
