@@ -23,6 +23,8 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.
+- [qa/](qa/): UI tests, Playwright tests over the mock data, each page compared with its screenshot; `npm run qa`
+  ([spec/qa.md](spec/qa.md)).
 - [mock/](mock/README.md): mock GitHub data for demos; `npm run mock` serves the web view over it, `npm run demo`
   records [docs/demo.mp4](docs/demo.mp4), a 10-second demo of the web view, and its preview:
 
@@ -36,3 +38,5 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 - [skills/code-review.md](skills/code-review.md): reviews a Pull Request with inline comments and a verdict; when the
   issue has the label `DelegatedToAI`, after Request Changes it waits up to 10 minutes for new commits and reviews again,
   at most 5 review rounds.
+- [skills/qa.md](skills/qa.md): runs the UI tests in [qa/](qa/), reads a failing screenshot and its difference, takes
+  new screenshots for a change meant to show, and adds a test for a new case in the spec.
