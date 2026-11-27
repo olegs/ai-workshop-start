@@ -37,11 +37,15 @@ File it:
   located, and the other bugs found with their scores, one line each, so they can be filed later.
 * Sign it as the red agent.
 
-Notify the user in Slack:
+Post a status update in Slack, always, when the hunt is finished, even with nothing found:
 * Post to the channel `ai-workshop-munich-2026-os` with the bot token in `SLACK_BOT_TOKEN`, as
-  the [human skill](../human/SKILL.md) says: the new issue's link and title, and one line on why it is the most important.
-  Never print the token.
-* No new issue filed, nothing found or every bug already open: do not post.
-* `SLACK_BOT_TOKEN` not set, or Slack unavailable: say so in a comment on the new issue.
+  the [human skill](../human/SKILL.md) says. Never print the token.
+* The update: how many attempts were made and what they tried, one short line each, then the outcome:
+  * a new issue filed: its link and title, and one line on why it is the most important;
+  * bugs found, but every one already open: the links of those issues, and the comments added, if any;
+  * nothing found: say so.
+* `SLACK_BOT_TOKEN` not set, or Slack unavailable: say so in a comment on the new issue, if one was filed, and in the
+  final answer.
 
-Done when at most 5 attempts were made, and the most important new bug, if any, is filed and announced in Slack.
+Done when at most 5 attempts were made, the most important new bug, if any, is filed, and the status update is posted
+in Slack.
