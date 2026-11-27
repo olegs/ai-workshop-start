@@ -1,3 +1,8 @@
+---
+name: human
+description: Ask a human in Slack for clarification or plan confirmation before uncertain or substantial changes.
+---
+
 Ask a human in Slack for clarification or confirmation before implementing an issue, instead of guessing.
 
 When to ask:

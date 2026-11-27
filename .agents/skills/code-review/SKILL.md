@@ -1,3 +1,8 @@
+---
+name: code-review
+description: Review pull requests with actionable inline findings and a clear verdict.
+---
+
 Review this PR and submit a verdict with inline comments.
 
 Investigate before judging: always read the original issue with comments, the PR description with comments, linked issues with comments, then the changed files and enough surrounding code to form your own model of the correct solution.

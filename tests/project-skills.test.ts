@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
 import { run } from '../src/commands.ts';
 import { openGitHub } from '../src/core/github.ts';
@@ -31,6 +31,25 @@ async function scanFiles(name: string, files: Record<string, string>, links: Rec
   assert.equal(result.code, 0, result.stderr);
   return { ...result, stdout: result.stdout.replaceAll(pathToFileURL(root).href, '<repo>') };
 }
+
+test('this repository: all six automations are discoverable project skills', async () => {
+  const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
+  const result = await atlas(['scan', root]);
+  assert.equal(result.code, 0, result.stderr);
+  const output = result.stdout.replaceAll(pathToFileURL(root).href, '<repo>');
+  assert.match(output, /^ai-workshop-start · 9 skills\n/);
+  for (const [name, description] of [
+    ['changes', 'Log meaningful changes in the change log, newest first and in plain words.'],
+    ['code-review', 'Review pull requests with actionable inline findings and a clear verdict.'],
+    ['human', 'Ask a human in Slack for clarification or plan confirmation before uncertain or substantial changes.'],
+    ['issue-solve', 'Handle issues labeled Delegated to AI, implement fixes, and manage review loops.'],
+    ['qa', 'Run and troubleshoot Playwright UI tests, maintain screenshots, and add tests for specification cases.'],
+    ['red-agent', 'Hunt reproducible bugs in the CLI and web view, then file and notify about the highest-priority finding.'],
+  ]) {
+    assert.ok(output.includes(`${name} — ${description}\n  <repo>/.agents/skills/${name}/SKILL.md`));
+  }
+  assert.match(result.stderr, /^warning: fixture\/\.agents\/skills\/release-checklist\/SKILL\.md: malformed front matter: .*; using the directory name$/);
+});
 
 test('a skill in each agent folder: .agents, .claude, .github and agent', async () => {
   const { stdout } = await scanFiles('roots', {

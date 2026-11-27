@@ -1,4 +1,9 @@
-Test the web view as a person sees it: the Playwright tests in `qa/web.spec.ts`, each page compared with its screenshot. What they cover and why: [spec/qa.md](../spec/qa.md).
+---
+name: qa
+description: Run and troubleshoot Playwright UI tests, maintain screenshots, and add tests for specification cases.
+---
+
+Test the web view as a person sees it: the Playwright tests in `qa/web.spec.ts`, each page compared with its screenshot. What they cover and why: [spec/qa.md](../../../spec/qa.md).
 
 Setup, once in a fresh checkout:
 * `npm ci`

@@ -1,4 +1,9 @@
-Log every meaningful change to [CHANGES.md](../CHANGES.md), in the same commit as the change.
+---
+name: changes
+description: Log meaningful changes in the change log, newest first and in plain words.
+---
+
+Log every meaningful change to [CHANGES.md](../../../CHANGES.md), in the same commit as the change.
 
 What to log: a change a user or a contributor would want to know about: a new feature or command, a change in what the
 CLI prints or the web view shows, a fixed bug they could have met, a new or changed automation or skill, a change to

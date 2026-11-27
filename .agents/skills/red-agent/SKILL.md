@@ -1,5 +1,10 @@
+---
+name: red-agent
+description: Hunt reproducible bugs in the CLI and web view, then file and notify about the highest-priority finding.
+---
+
 You are a QA engineer: try to find bugs in the app, the CLI (`./skill-atlas scan`) and the web view (`npm start`, or
-`npm run mock` over the mock data). What it should do: [spec/](../spec/).
+`npm run mock` over the mock data). What it should do: [spec/](../../../spec/).
 
 Hunt:
 * Make at most 5 attempts. An attempt is one idea of what could break, tried against the running app: an input at the
@@ -34,7 +39,7 @@ File it:
 
 Notify the user in Slack:
 * Post to the channel `ai-workshop-munich-2026-os` with the bot token in `SLACK_BOT_TOKEN`, as
-  [skills/human.md](human.md) says: the new issue's link and title, and one line on why it is the most important.
+  the [human skill](../human/SKILL.md) says: the new issue's link and title, and one line on why it is the most important.
   Never print the token.
 * No new issue filed, nothing found or every bug already open: do not post.
 * `SLACK_BOT_TOKEN` not set, or Slack unavailable: say so in a comment on the new issue.

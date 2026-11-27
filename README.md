@@ -33,19 +33,19 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 
 ## Automations
 
-- [skills/issue-solve.md](skills/issue-solve.md): an issue labeled "Delegated to AI" gets a branch, a fix and a Pull
+- [.agents/skills/issue-solve/SKILL.md](.agents/skills/issue-solve/SKILL.md): an issue labeled "Delegated to AI" gets a branch, a fix and a Pull
   Request, with a demo video when the web view changes, its preview playing in the description; it merges, or asks the AI operator about blocking review findings. With the label `DelegatedToAI` it
   addresses them and updates the PR instead, waiting up to 10 minutes for each new review, at most 5 review rounds.
-- [skills/code-review.md](skills/code-review.md): reviews a Pull Request with inline comments and a verdict; when the
+- [.agents/skills/code-review/SKILL.md](.agents/skills/code-review/SKILL.md): reviews a Pull Request with inline comments and a verdict; when the
   issue has the label `DelegatedToAI`, after Request Changes it waits up to 10 minutes for new commits and reviews again,
   at most 5 review rounds.
-- [skills/qa.md](skills/qa.md): runs the UI tests in [qa/](qa/), reads a failing screenshot and its difference, takes
+- [.agents/skills/qa/SKILL.md](.agents/skills/qa/SKILL.md): runs the UI tests in [qa/](qa/), reads a failing screenshot and its difference, takes
   new screenshots for a change meant to show, and adds a test for a new case in the spec.
-- [skills/human.md](skills/human.md): human-in-the-loop: when an issue is vague or the feature is big, asks for
+- [.agents/skills/human/SKILL.md](.agents/skills/human/SKILL.md): human-in-the-loop: when an issue is vague or the feature is big, asks for
   clarification or confirmation of the plan in the Slack channel `ai-workshop-munich-2026-os` (with `SLACK_BOT_TOKEN`),
   waits up to 10 minutes for a reply in the thread, and asks on the issue instead when no one answers.
-- [skills/red-agent.md](skills/red-agent.md): a QA engineer hunting for bugs in the CLI and the web view, at most 5
+- [.agents/skills/red-agent/SKILL.md](.agents/skills/red-agent/SKILL.md): a QA engineer hunting for bugs in the CLI and the web view, at most 5
   attempts; makes each bug granular with the shortest way to reproduce it, scores them, files the most important one not
   among the open issues, and announces it in the Slack channel `ai-workshop-munich-2026-os`.
-- [skills/changes.md](skills/changes.md): logs each meaningful change in [CHANGES.md](CHANGES.md), not quick fixes or
+- [.agents/skills/changes/SKILL.md](.agents/skills/changes/SKILL.md): logs each meaningful change in [CHANGES.md](CHANGES.md), not quick fixes or
   small refactorings.
