@@ -1,5 +1,7 @@
 When the new issue with tag "Delegated to AI" is created of the label is added to the exisiting issue, do the following:
 * Create a branch for the fix with the name pattern delegated-to-ai/<ISSUE_ID>_<NAME>, where <ISSUE_ID> is the issue number, and <NAME> is the short description  
+* If the task is vague or the feature is relatively big, ask for clarification or confirmation of the plan in Slack
+  first, as [skills/human.md](human.md) says
 * Implement the fix
 * If the fix changes the UI (what the web view shows or how it behaves: `src/web/`, `src/web.ts`), record a demo video,
   as spec/demo.md says:

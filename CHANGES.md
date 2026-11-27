@@ -3,4 +3,6 @@
 Meaningful changes, newest first; how to log one: [skills/changes.md](skills/changes.md).
 
 ## 2026-11-27
+- A skill, [skills/human.md](skills/human.md), to ask in Slack for clarification or confirmation of the plan when an
+  issue is vague or big, before implementing it (#29).
 - A skill, [skills/changes.md](skills/changes.md), to log every meaningful change here (#27).
