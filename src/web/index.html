@@ -563,11 +563,13 @@
       const style = getComputedStyle(document.documentElement);
       const css = (name) => style.getPropertyValue(name).trim();
       const visible = (i) => !cards[i].hidden;
+      // The names beside the points while 40 or fewer are on the whole map: more would cover it.
+      const named = cards.filter((card) => !card.hidden).length <= 40;
       const trace = (name, color, members) => {
         const indices = members.filter(visible);
         return {
           type: 'scatter',
-          mode: indices.length <= 40 ? 'markers+text' : 'markers',
+          mode: named ? 'markers+text' : 'markers',
           name,
           x: indices.map((i) => result.points[i][0]),
           y: indices.map((i) => result.points[i][1]),

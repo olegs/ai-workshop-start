@@ -154,7 +154,7 @@ test('unknown paths are 404', async () => {
 
 /** The page as the server serves it, its own script running, its fetch going to the server. */
 /** What the page asked Plotly to draw: each call's traces and layout, the latest last. */
-type Drawn = { data: { name: string; text: string[]; x: number[]; y: number[]; customdata: [number, string, string][]; marker: { color: string } }[]; layout: Record<string, unknown> };
+type Drawn = { data: { name: string; mode: string; text: string[]; x: number[]; y: number[]; customdata: [number, string, string][]; marker: { color: string } }[]; layout: Record<string, unknown> };
 
 async function openPage(path = '/', server = base) {
   const plotted: Drawn[] = [];
@@ -808,6 +808,46 @@ test('in the page: the map, drawn by Plotly: a point for each skill, a trace for
       page.close();
     }
   });
+});
+
+test('in the page: the names beside the points while 40 or fewer are on the whole map, however they are grouped', async () => {
+  // 45 skills, 15 groups of 3, each group under 40: the whole map counts.
+  const commit = '4545454545454545454545454545454545454545';
+  const topics = 'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar'.split(' ');
+  const files: Record<string, string> = {};
+  topics.forEach((topic, t) => {
+    for (let k = 0; k < 3; k++) files[`.claude/skills/${topic}-${k}/SKILL.md`] = skillText(`${topic}-${k}`, `Works on ${topic} ${topic} things, part ${'xyz'[k]}${t}.`);
+  });
+  const many = replay({
+    'https://api.github.com/repos/JetBrains/many': { status: 200, body: { full_name: 'JetBrains/many', default_branch: 'main' } },
+    'https://api.github.com/repos/JetBrains/many/commits/main': { status: 200, body: { sha: commit } },
+    [`https://api.github.com/repos/JetBrains/many/git/trees/${commit}?recursive=1`]: {
+      status: 200,
+      body: { truncated: false, tree: Object.keys(files).map((path) => ({ path, mode: '100644', type: 'blob', sha: '0' })) },
+    },
+    ...Object.fromEntries(Object.entries(files).map(([path, text]) => [`https://raw.githubusercontent.com/JetBrains/many/${commit}/${path}`, { status: 200, body: text }])),
+  });
+  const manyServer = createWebServer({ fetch: many });
+  await new Promise<void>((resolve) => manyServer.listen(0, '127.0.0.1', resolve));
+  const page = await openPage('/', `http://127.0.0.1:${(manyServer.address() as AddressInfo).port}`);
+  try {
+    const { document } = page;
+    await page.scan('JetBrains/many');
+    assert.equal(document.getElementById('status')!.textContent, 'JetBrains/many · 45 skills');
+    clusterButton(document).click();
+    await waitFor(() => page.plotted.length > 0);
+    const { data } = page.plotted.at(-1)!;
+    assert.equal(data.length, 15);
+    assert.ok(data.every((trace) => trace.text.length < 40));
+    assert.deepEqual([...new Set(data.map((trace) => trace.mode))], ['markers'], '45 on the map: no names');
+    // Narrowed to 40 or fewer: the names again.
+    filter(page, 'alpha');
+    await waitFor(() => page.plotted.at(-1)!.data.flatMap((trace) => trace.text).length === 3);
+    assert.deepEqual([...new Set(page.plotted.at(-1)!.data.map((trace) => trace.mode))], ['markers+text']);
+  } finally {
+    page.close();
+    manyServer.close();
+  }
 });
 
 test('in the page: the filter still applies to the groups and the map; a group with no match is hidden', async () => {
