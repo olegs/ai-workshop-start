@@ -17,7 +17,8 @@ A GitHub organization's URL, `./skill-atlas scan https://github.com/JetBrains`, 
 one; set `GITHUB_TOKEN` for a large one.
 
 `npm start` opens the web view on http://localhost:3000: type a repository or an organization, press Scan. It keeps
-what it scanned for 24 hours, so scanning the same repository again does not fetch it from GitHub. **Cluster**
+what it scanned for 24 hours, in `~/.skill-atlas` across restarts, so scanning the same repository again does not
+fetch it from GitHub. **Cluster**
 groups the skills that say similar things, by the words of their names and descriptions, and draws them on a map.
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.

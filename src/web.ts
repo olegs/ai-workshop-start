@@ -2,12 +2,21 @@
 // GitHub repositories only: a web page must not read the server's own directories.
 import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { firstSentence } from './commands.ts';
-import { createCache, DAY, LIMIT } from './core/cache.ts';
+import { CACHE_FILE, createCache, DAY, LIMIT } from './core/cache.ts';
 import { AtlasError } from './core/errors.ts';
-import { openGitHub, openGitHubOrganization, parseGitHubOrganizationUrl, parseGitHubUrl, type Fetch } from './core/github.ts';
+import {
+  openGitHub,
+  openGitHubOrganization,
+  openOrganizationRepository,
+  parseGitHubOrganizationUrl,
+  parseGitHubUrl,
+  type Fetch,
+  type Organization,
+} from './core/github.ts';
 import { skillLink } from './core/model.ts';
 import { scanOrganization } from './core/organization.ts';
 import { scan, type ScanResult, type Source } from './core/scan.ts';
@@ -19,6 +28,11 @@ export type WebOptions = {
   now?: () => number;
   /** At most this many scans kept, each repository of an organization one; 20 000 by default. */
   cacheLimit?: number;
+  /**
+   * The directory that keeps what was scanned across runs, in `cache.json`: `npm start` passes `~/.skill-atlas`.
+   * None: in memory only, as the tests and the mock server do.
+   */
+  cacheDir?: string;
 };
 
 /** What `/api/scan` answers on success. */
@@ -79,13 +93,25 @@ export function createWebServer(options: WebOptions): Server {
   // What GitHub answered, kept for a day: scanning the same repository or organization again fetches nothing.
   // Only results, not GitHub's raw answers: a large repository's tree is let go once it is scanned.
   // GitHub names are case-insensitive: so are the keys.
-  const cache = createCache({ ttl: DAY, limit: options.cacheLimit ?? LIMIT, now: options.now });
+  // With a cache directory, kept there too: a restart forgets nothing. So only plain data is kept: an
+  // organization's list, and each repository opened again from it.
+  const cache = createCache({
+    ttl: DAY,
+    limit: options.cacheLimit ?? LIMIT,
+    now: options.now,
+    file: options.cacheDir === undefined ? undefined : join(options.cacheDir, CACHE_FILE),
+  });
   const scanRepository = (id: string, open: () => Promise<Source>) =>
     cache.get(`repository:${id.toLowerCase()}`, async () => scan(await open()));
-  const openOrganization = (name: string, input: string) =>
-    cache.get(`organization:${name.toLowerCase()}`, () => openGitHubOrganization(input, options));
+  const openOrganization = async (name: string, input: string): Promise<Organization> => {
+    const listed = await cache.get(`organization:${name.toLowerCase()}`, async () => {
+      const { id, url, repositories } = await openGitHubOrganization(input, options);
+      return { id, url, repositories };
+    });
+    return { ...listed, open: (repository) => openOrganizationRepository(repository, options) };
+  };
 
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     const send = (status: number, type: string, body: string) => {
       response.writeHead(status, { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store' });
@@ -152,4 +178,7 @@ export function createWebServer(options: WebOptions): Server {
       else json(500, { error: unexpected(error) });
     }
   });
+  // A scan that came just before the server stops is written before it is gone.
+  server.on('close', () => cache.close());
+  return server;
 }

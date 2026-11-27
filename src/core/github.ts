@@ -88,8 +88,13 @@ export async function openGitHubOrganization(input: string, options: GitHubOptio
     // Code search allows only a few requests a minute: one repository after another goes through the tree,
     // and searches only where the tree is too large for one answer.
     // Each repository its own client: its answers, its trees, are let go once it is scanned.
-    open: (repository) => openRepository(client(options), repository, options.token ? 'tree, then search' : 'tree'),
+    open: (repository) => openOrganizationRepository(repository, options),
   };
+}
+
+/** Opens a repository an organization listed, to scan: the web server keeps the list, not the organization. */
+export function openOrganizationRepository(repository: RepositoryRef, options: GitHubOptions): Promise<Source> {
+  return openRepository(client(options), repository, options.token ? 'tree, then search' : 'tree');
 }
 
 type Strategy = 'search' | 'tree' | 'tree, then search';

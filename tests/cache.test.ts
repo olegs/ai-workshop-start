@@ -1,18 +1,31 @@
 // spec/web.md, "Cache": the web server keeps what it scanned for 24 hours, with GitHub answering from the
 // recording in tests/helpers.ts and every request it gets counted.
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { createServer } from 'node:net';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test, type TestContext } from 'node:test';
-import { createCache, DAY } from '../src/core/cache.ts';
+import { CACHE_DIR, CACHE_FILE, createCache, DAY, SAVE_DELAY } from '../src/core/cache.ts';
 import type { Fetch } from '../src/core/github.ts';
 import { createWebServer } from '../src/web.ts';
 import { github } from './helpers.ts';
 
 /** A server on its own cache and clock, and the GitHub requests it made. */
-async function serve(t: TestContext, fetch: Fetch = github, cacheLimit?: number) {
+async function serve(
+  t: TestContext,
+  fetch: Fetch = github,
+  cacheLimit?: number,
+  persisted: { cacheDir?: string; clock?: { time: number } } = {},
+) {
   const requests: string[] = [];
-  const clock = { time: Date.parse('2026-11-26T12:00:00Z') };
+  const clock = persisted.clock ?? { time: Date.parse('2026-11-26T12:00:00Z') };
   const server = createWebServer({
+    cacheDir: persisted.cacheDir,
     fetch: (url, init) => {
       requests.push(url);
       return fetch(url, init);
@@ -31,7 +44,16 @@ async function serve(t: TestContext, fetch: Fetch = github, cacheLimit?: number)
     const text = await response.text();
     return { status: response.status, text, requests: requests.slice(before) };
   };
-  return { scan, clock, requests };
+  /** Stops the server, as a restart does. */
+  const stop = () => new Promise<void>((resolve) => server.close(() => resolve()));
+  return { scan, clock, requests, stop };
+}
+
+/** A directory of its own for a server's cache, removed after the test. */
+function cacheDir(t: TestContext) {
+  const dir = mkdtempSync(join(tmpdir(), 'skill-atlas-cache-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
 }
 
 test('a repository scanned again within 24 hours: the same answer, nothing fetched from GitHub', async (t) => {
@@ -163,4 +185,152 @@ test('the cache keeps at most its limit, the oldest goes first', async () => {
   assert.equal(loads, 3);
   assert.equal(await cache.get('a', load('a')), 'a');
   assert.equal(loads, 4);
+});
+
+// spec/web.md, "Cache": `npm start` keeps it in ~/.skill-atlas, so a restart forgets nothing.
+
+test('npm start keeps the cache in ~/.skill-atlas', () => {
+  assert.equal(CACHE_DIR, join(homedir(), '.skill-atlas'));
+  assert.match(readFileSync(new URL('../src/server.ts', import.meta.url), 'utf8'), /cacheDir: CACHE_DIR/);
+});
+
+test('after a restart, a repository and an organization scanned within 24 hours: nothing fetched', async (t) => {
+  const dir = cacheDir(t);
+  const before = await serve(t, github, undefined, { cacheDir: dir });
+  const repository = await before.scan('JetBrains/example');
+  const organization = await before.scan('Acme');
+  assert.ok(repository.requests.length > 0);
+  await before.stop();
+  assert.ok(existsSync(join(dir, CACHE_FILE)));
+
+  const clock = { time: before.clock.time + DAY / 2 };
+  const after = await serve(t, github, undefined, { cacheDir: dir, clock });
+  const again = await after.scan('jetbrains/EXAMPLE');
+  assert.equal(again.text, repository.text);
+  assert.deepEqual(again.requests, []);
+  const listed = await after.scan('https://github.com/acme');
+  assert.equal(listed.text, organization.text);
+  // Only Acme/broken, which could not be scanned, is asked for again; the list and the others come from the disk.
+  assert.deepEqual(listed.requests, ['https://api.github.com/repos/Acme/broken/commits/main']);
+  assert.deepEqual((await after.scan('Acme/app')).requests, []);
+});
+
+test('after a restart, 24 hours after the scan: GitHub is asked again', async (t) => {
+  const dir = cacheDir(t);
+  const before = await serve(t, github, undefined, { cacheDir: dir });
+  const first = await before.scan('JetBrains/example');
+  await before.stop();
+  const clock = { time: before.clock.time + DAY - 1 };
+  const soon = await serve(t, github, undefined, { cacheDir: dir, clock });
+  assert.deepEqual((await soon.scan('JetBrains/example')).requests, []);
+  await soon.stop();
+  const later = await serve(t, github, undefined, { cacheDir: dir, clock: { time: clock.time + 1 } });
+  const again = await later.scan('JetBrains/example');
+  assert.equal(again.text, first.text);
+  assert.deepEqual(again.requests, first.requests);
+});
+
+test('the cache is saved shortly after a scan, without waiting for the server to stop, readable by the user alone', async (t) => {
+  const dir = cacheDir(t);
+  const server = await serve(t, github, undefined, { cacheDir: dir });
+  await server.scan('JetBrains/example');
+  const file = join(dir, CACHE_FILE);
+  for (let waited = 0; !existsSync(file) && waited < 20 * SAVE_DELAY; waited += SAVE_DELAY / 4) {
+    await new Promise((resolve) => setTimeout(resolve, SAVE_DELAY / 4));
+  }
+  assert.ok(existsSync(file));
+  assert.match(readFileSync(file, 'utf8'), /JetBrains\/example/);
+  if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o077, 0);
+  const restarted = await serve(t, github, undefined, { cacheDir: dir });
+  assert.deepEqual((await restarted.scan('JetBrains/example')).requests, []);
+});
+
+test('what could not be scanned is not saved: asked for again after a restart', async (t) => {
+  const dir = cacheDir(t);
+  const before = await serve(t, github, undefined, { cacheDir: dir });
+  assert.equal((await before.scan('nobody')).status, 502);
+  await before.stop();
+  const after = await serve(t, github, undefined, { cacheDir: dir });
+  assert.deepEqual((await after.scan('nobody')).requests, ['https://api.github.com/users/nobody']);
+});
+
+test('a broken cache file is an empty cache: the scan goes on, and the file is replaced', async (t) => {
+  const dir = cacheDir(t);
+  const file = join(dir, CACHE_FILE);
+  for (const broken of ['{ not json', '{"version":99,"entries":[]}', '[]']) {
+    writeFileSync(file, broken);
+    const server = await serve(t, github, undefined, { cacheDir: dir });
+    const first = await server.scan('JetBrains/example');
+    assert.equal(first.status, 200);
+    assert.ok(first.requests.length > 0);
+    await server.stop();
+    assert.notEqual(readFileSync(file, 'utf8'), broken);
+  }
+});
+
+test('a cache directory that cannot be written: the server still scans, and keeps it in memory', async (t) => {
+  const dir = cacheDir(t);
+  // A file where the directory should be: nothing can be written under it.
+  const blocked = join(dir, 'blocked');
+  writeFileSync(blocked, '');
+  const errors: unknown[] = [];
+  t.mock.method(console, 'error', (...args: unknown[]) => errors.push(args));
+  const server = await serve(t, github, undefined, { cacheDir: blocked });
+  assert.equal((await server.scan('JetBrains/example')).status, 200);
+  assert.deepEqual((await server.scan('JetBrains/example')).requests, []);
+  await server.stop();
+  assert.equal(errors.length, 1);
+});
+
+test('after a restart, the cache limit still holds: the oldest go first', async (t) => {
+  const dir = cacheDir(t);
+  const before = await serve(t, github, undefined, { cacheDir: dir });
+  const organization = await before.scan('Acme');
+  before.clock.time += 1000;
+  await before.scan('JetBrains/example');
+  await before.stop();
+  // Of Acme's list, its repositories and JetBrains/example, only the newest fits.
+  const after = await serve(t, github, 1, { cacheDir: dir, clock: before.clock });
+  assert.deepEqual((await after.scan('JetBrains/example')).requests, []);
+  assert.deepEqual((await after.scan('Acme')).requests, organization.requests);
+});
+
+test('the mock server, for demos, keeps its cache in memory only: each demo the same', () => {
+  assert.doesNotMatch(readFileSync(new URL('../mock/server.ts', import.meta.url), 'utf8'), /cacheDir/);
+});
+
+test('npm start reads ~/.skill-atlas as it starts, and stops on Ctrl-C with the file whole', async (t) => {
+  const home = cacheDir(t);
+  const file = join(home, '.skill-atlas', CACHE_FILE);
+  // What a run before scanned: answered from it, GitHub is not asked.
+  const before = await serve(t, github, undefined, { cacheDir: join(home, '.skill-atlas'), clock: { time: Date.now() } });
+  const first = await before.scan('JetBrains/example');
+  await before.stop();
+  const saved = readFileSync(file, 'utf8');
+
+  const probe = createServer().listen(0, '127.0.0.1');
+  await once(probe, 'listening');
+  const free = String((probe.address() as AddressInfo).port);
+  await new Promise((resolve) => probe.close(resolve));
+  const server = spawn(process.execPath, [fileURLToPath(new URL('../src/server.ts', import.meta.url))], {
+    env: { ...process.env, HOME: home, USERPROFILE: home, PORT: free, GITHUB_TOKEN: '' },
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  t.after(() => server.kill());
+  let output = '';
+  server.stdout.setEncoding('utf8');
+  const port = await new Promise<string>((resolve) =>
+    server.stdout.on('data', (chunk: string) => {
+      output += chunk;
+      const match = /localhost:(\d+)/.exec(output);
+      if (match) resolve(match[1]);
+    }),
+  );
+  const answer = await globalThis.fetch(`http://127.0.0.1:${port}/api/scan?repo=jetbrains/example`);
+  assert.equal(answer.status, 200);
+  assert.equal(await answer.text(), first.text);
+  server.kill('SIGINT');
+  const [code] = await once(server, 'exit');
+  assert.equal(code, 0);
+  assert.equal(readFileSync(file, 'utf8'), saved);
 });
