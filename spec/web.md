@@ -17,9 +17,14 @@
     stopwords or numbers alone, a plural counted as its singular. Two groups merge while the **average cosine
     similarity** of their skills is at least *0.12* (average-linkage); a skill like no other is in no group
   - `N groups of similar skills, M skills in none`, then a **map**, drawn by **Plotly**: each skill a point, its name
-    next to it while 40 or fewer are shown, where the first two principal components of the vectors put it; each group
-    in its colour, the skills in none grey, a legend; hovering a point shows its name, repository and first sentence;
-    clicking it scrolls to its card and lights it up
+    next to it while 40 or fewer are shown; each group in its colour, the skills in none grey, a legend; hovering a point
+    shows its name, repository and first sentence; clicking it scrolls to its card and lights it up
+  - The map **agrees with the groups**: each group together, apart from the others, however many groups there are; a
+    skill's nearest point is of its group. The first two principal components of the vectors place the skills, but two
+    dimensions alone mix the groups, so each group is a disc where its skills are on average, its area after its size,
+    its skills in it where the components of the group alone put them; the discs are pushed apart, from each other and
+    from the skills in none, as little as needed; a skill in no group where the components put it. Copies of a skill in
+    other repositories side by side, not one over the other
   - Then a section for each group, the largest first: a dot of its colour, its **label**, the 3 words its skills share
     that weigh most in them, `word · word · word · N skills`, and its skills' cards, each with its repository's name;
     last, `Other skills`, those in no group (`No similar skills` when there is no group)

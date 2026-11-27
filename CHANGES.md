@@ -3,6 +3,8 @@
 Meaningful changes, newest first; how to log one: [.agents/skills/changes/SKILL.md](.agents/skills/changes/SKILL.md).
 
 ## 2026-11-27
+- The web view's cluster map agrees with the groups: each group's skills are drawn together, apart from the other
+  groups, instead of mixed colours over each other when there are many groups; copies of a skill show side by side (#38).
 - The web view keeps what it scanned in `~/.skill-atlas/cache.json`, so a restart no longer forgets it: a
   repository or an organization scanned within 24 hours is not fetched from GitHub again (#36).
 - The CLI and the web view no longer cut a description's first sentence at an abbreviation such as `e.g.` or `i.e.`
