@@ -38,3 +38,5 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 - [skills/code-review.md](skills/code-review.md): reviews a Pull Request with inline comments and a verdict; when the
   issue has the label `DelegatedToAI`, after Request Changes it waits up to 10 minutes for new commits and reviews again,
   at most 5 review rounds.
+- [skills/qa.md](skills/qa.md): runs the UI tests in [qa/](qa/), reads a failing screenshot and its difference, takes
+  new screenshots for a change meant to show, and adds a scenario for a new case in the spec.
