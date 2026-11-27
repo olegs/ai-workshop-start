@@ -40,5 +40,8 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
   at most 5 review rounds.
 - [skills/qa.md](skills/qa.md): runs the UI tests in [qa/](qa/), reads a failing screenshot and its difference, takes
   new screenshots for a change meant to show, and adds a test for a new case in the spec.
+- [skills/human.md](skills/human.md): human-in-the-loop: when an issue is vague or the feature is big, asks for
+  clarification or confirmation of the plan in the Slack channel `ai-workshop-munich-2026-os` (with `SLACK_BOT_TOKEN`),
+  waits up to 10 minutes for a reply in the thread, and asks on the issue instead when no one answers.
 - [skills/changes.md](skills/changes.md): logs each meaningful change in [CHANGES.md](CHANGES.md), not quick fixes or
   small refactorings.
