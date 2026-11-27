@@ -40,3 +40,5 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
   at most 5 review rounds.
 - [skills/qa.md](skills/qa.md): runs the UI tests in [qa/](qa/), reads a failing screenshot and its difference, takes
   new screenshots for a change meant to show, and adds a test for a new case in the spec.
+- [skills/changes.md](skills/changes.md): logs each meaningful change in [CHANGES.md](CHANGES.md), not quick fixes or
+  small refactorings.
