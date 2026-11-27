@@ -99,3 +99,58 @@ test('cluster: no skills, one skill, skills with no words that count: no groups,
   assert.deepEqual(empty.others, [0, 1]);
   assert.deepEqual(empty.points, [[0, 0], [0, 0]]);
 });
+
+/** Many skills in many groups, as a large organization has: twelve topics of their own words, a few shared words. */
+function manyTopics(): Skill[] {
+  const topics = ['gradle build plugin compile', 'kotlin compiler diagnostic', 'release notes changelog', 'docker container image',
+    'database migration schema', 'react component frontend', 'agent prompt llm', 'security audit vulnerability',
+    'android emulator mobile', 'markdown site documentation', 'benchmark performance profile', 'git commit rebase'];
+  const shared = ['update', 'run', 'check', 'review', 'project', 'code'];
+  const skills: Skill[] = [];
+  for (let i = 0; i < 96; i++) {
+    const words = topics[i % topics.length].split(' ');
+    const pick = (k: number) => words[(i * 7 + k * 3) % words.length];
+    skills.push({ name: `${words[0]}-${pick(1)}-${i}`, description: `${pick(2)} ${pick(3)} ${shared[i % 6]} ${shared[(i * 5) % 6]} for the ${shared[(i + 2) % 6]}.` });
+  }
+  return skills;
+}
+
+/** Each group's disc on the map: its skills' middle and the farthest of them from it. */
+function discs(result: ReturnType<typeof cluster>) {
+  return result.groups.map(({ members }) => {
+    const x = members.reduce((sum, i) => sum + result.points[i][0], 0) / members.length;
+    const y = members.reduce((sum, i) => sum + result.points[i][1], 0) / members.length;
+    return { x, y, radius: Math.max(...members.map((i) => Math.hypot(result.points[i][0] - x, result.points[i][1] - y))) };
+  });
+}
+
+test('cluster: the map agrees with the groups: each group together, apart from the others, however many there are (#38)', () => {
+  for (const skills of [MOCK_SKILLS, manyTopics()]) {
+    const result = cluster(skills);
+    const groupOf = new Map(result.groups.flatMap((group, g) => group.members.map((i) => [i, g] as const)));
+    if (skills !== MOCK_SKILLS) assert.ok(result.groups.length >= 8, `${result.groups.length} groups`);
+    // Each skill of a group: the nearest point to it is of its group.
+    for (const [i, g] of groupOf) {
+      let nearest = -1;
+      for (let j = 0; j < skills.length; j++) {
+        const d = (k: number) => Math.hypot(result.points[k][0] - result.points[i][0], result.points[k][1] - result.points[i][1]);
+        if (j !== i && (nearest < 0 || d(j) < d(nearest))) nearest = j;
+      }
+      assert.equal(groupOf.get(nearest), g, `${skills[i].name}: nearest is ${skills[nearest].name}`);
+    }
+    // The groups' discs do not overlap, and a skill in no group is in no group's disc.
+    const all = discs(result);
+    for (let a = 0; a < all.length; a++) {
+      for (let b = a + 1; b < all.length; b++) assert.ok(Math.hypot(all[a].x - all[b].x, all[a].y - all[b].y) > all[a].radius + all[b].radius);
+      for (const i of result.others) assert.ok(Math.hypot(result.points[i][0] - all[a].x, result.points[i][1] - all[a].y) > all[a].radius);
+    }
+    assert.deepEqual(load().cluster(skills), result); // the same every time
+  }
+});
+
+test('cluster: the map: copies of a skill in other repositories side by side, not one over the other', () => {
+  const copy = { name: 'changelog', description: 'Updates the changelog from the latest release.' };
+  const result = cluster([copy, copy, copy, { name: 'release-notes', description: 'Drafts the release notes of the latest release.' }]);
+  assert.deepEqual(result.groups.map((group) => group.members.length), [4]);
+  assert.equal(new Set(result.points.map((point) => point.join())).size, 4);
+});
