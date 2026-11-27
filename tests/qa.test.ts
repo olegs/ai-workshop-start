@@ -15,11 +15,11 @@ const reason = existsSync(executable) ? false : 'no Chromium for Playwright, and
 test('qa: every test in qa/web.spec.ts passes, its page the same as its screenshot', { skip: reason, timeout: 120_000 }, () => {
   const run = spawnSync('npx', ['playwright', 'test', '-c', 'qa', '--reporter=line'], { cwd: root, encoding: 'utf8' });
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
-  assert.match(run.stdout, /8 passed/);
+  assert.match(run.stdout, /11 passed/);
 });
 
 test('qa: each screenshot a test compares with is in qa/screenshots, and no other', () => {
   const named = [...readFileSync(`${root}qa/web.spec.ts`, 'utf8').matchAll(/matchesScreenshot\(page, '([^']+)'\)/g)].map((match) => match[1]);
-  assert.equal(named.length, 8);
+  assert.equal(named.length, 11);
   assert.deepEqual(named.map((name) => `${name}.png`).sort(), readdirSync(`${root}qa/screenshots`).sort());
 });

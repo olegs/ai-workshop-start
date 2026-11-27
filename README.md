@@ -17,7 +17,8 @@ A GitHub organization's URL, `./skill-atlas scan https://github.com/JetBrains`, 
 one; set `GITHUB_TOKEN` for a large one.
 
 `npm start` opens the web view on http://localhost:3000: type a repository or an organization, press Scan. It keeps
-what it scanned for 24 hours, so scanning the same repository again does not fetch it from GitHub.
+what it scanned for 24 hours, so scanning the same repository again does not fetch it from GitHub. **Cluster**
+groups the skills that say similar things, by the words of their names and descriptions, and draws them on a map.
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 
@@ -26,9 +27,9 @@ Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 - [qa/](qa/): UI tests, Playwright tests over the mock data, each page compared with its screenshot; `npm run qa`
   ([spec/qa.md](spec/qa.md)).
 - [mock/](mock/README.md): mock GitHub data for demos; `npm run mock` serves the web view over it, `npm run demo`
-  records [docs/demo.mp4](docs/demo.mp4), a 10-second demo of the web view, and its preview:
+  records [docs/demo.mp4](docs/demo.mp4), a 15-second demo of the web view, and its preview:
 
-  ![The web view scans the JetBrains organization over the mock data, then filters the skills](docs/demo.gif)
+  ![The web view scans the JetBrains organization over the mock data, then clusters its skills on a map](docs/demo.gif)
 
 ## Automations
 

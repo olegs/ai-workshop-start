@@ -10,7 +10,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, type Page } from 'playwright';
+import { chromium, type Locator, type Page } from 'playwright';
 import { createWebServer } from '../src/web.ts';
 import { mockGitHub } from './github.ts';
 
@@ -27,18 +27,24 @@ export function previewPath(output: string): string {
 
 /** What a person does on the page; `human` moves, clicks and types like one. */
 async function DEMO(page: Page, human: Human) {
-  await human.pause(1500); // the page, nothing below the results: no footer claims that nothing is stored
+  await human.pause(500);
   await human.click('#repo');
   await human.type('JetBrains');
-  await human.pause(250);
   await human.click('#scan');
   await page.locator('#repositories .skill').first().waitFor();
   await page.locator('#loading').waitFor({ state: 'hidden' });
-  await human.pause(1200); // the repositories, their skills
-  await human.scroll(2400); // down to the end of the page, as a person reads on
-  await human.pause(2200); // the last repository, then the page ends: no footer
-  await human.scroll(-2400);
-  await human.pause(1000);
+  await human.pause(700); // the repositories, their skills, the Cluster button by the filter
+  await human.click('#cluster');
+  await page.locator('#cluster-map .scatterlayer .point').first().waitFor();
+  await human.scroll(330); // the map in full: similar skills close together, each group in its colour
+  await human.pause(1100);
+  // A point of each group hovered: its skill, its repository, what it does.
+  await human.hover(page.locator('#cluster-map .scatterlayer .trace').nth(0).locator('.point').nth(0));
+  await human.pause(1100);
+  await human.hover(page.locator('#cluster-map .scatterlayer .trace').nth(1).locator('.point').nth(2));
+  await human.pause(800);
+  await human.clickHere(); // its card, below, lit up
+  await human.pause(1800);
 }
 
 type Human = ReturnType<typeof human>;
@@ -70,6 +76,19 @@ function human(page: Page) {
       const box = await page.locator(selector).boundingBox();
       if (!box) throw new Error(`Not on the page: ${selector}`);
       await moveTo(box.x + box.width * 0.4, box.y + box.height / 2);
+      await pause(150);
+      await page.mouse.down();
+      await pause(70);
+      await page.mouse.up();
+    },
+    /** Glides to the middle of an element, as to read what it shows on hover. */
+    async hover(locator: Locator) {
+      const box = await locator.boundingBox();
+      if (!box) throw new Error('Not on the page');
+      await moveTo(box.x + box.width / 2, box.y + box.height / 2);
+    },
+    /** Clicks where the mouse is. */
+    async clickHere() {
       await pause(150);
       await page.mouse.down();
       await pause(70);
