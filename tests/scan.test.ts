@@ -3,7 +3,7 @@
 // tests/project-skills.test.ts.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import { openGitHub } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
+import { firstSentence } from '../src/commands.ts';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE } from './helpers.ts';
 
 const fixture = await atlas(['scan', FIXTURE]);
@@ -103,4 +104,42 @@ test('an empty repository, no commits yet → 0 skills, not an error', async () 
   const { code, stdout, stderr } = await atlas(['scan', 'https://github.com/JetBrains/new'], empty);
   assert.equal(code, 0, stderr);
   assert.equal(stdout, 'JetBrains/new · 0 skills');
+});
+
+test('the first sentence does not end at an abbreviation: "e.g.", "i.e.", "vs.", or a "." before a lowercase word', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'skill-atlas-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const skills: Record<string, string> = {
+    fmt: 'Formats files, e.g. JSON and YAML, before a commit.',
+    test: 'Runs tests, i.e. the unit suite. Then lints.',
+    compare: 'Compares A vs. B. Prints the diff.',
+    retry: 'Retries approx. 5 times. Then fails.',
+    list: 'Lists JSON, YAML, etc. Then stops.',
+    quote: 'Supports "e.g. JSON" input. Then more.',
+  };
+  for (const [name, description] of Object.entries(skills)) {
+    mkdirSync(join(root, '.claude/skills', name), { recursive: true });
+    writeFileSync(join(root, '.claude/skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${description}\n---\n`);
+  }
+  const scanned = spawnSync(process.execPath, [CLI, 'scan', root], { encoding: 'utf8' });
+  assert.equal(scanned.status, 0, scanned.stderr);
+  assert.deepEqual(
+    scanned.stdout.split('\n').filter((line) => line.includes(' — ')),
+    [
+      'compare — Compares A vs. B.',
+      'fmt — Formats files, e.g. JSON and YAML, before a commit.',
+      'list — Lists JSON, YAML, etc.',
+      'quote — Supports "e.g. JSON" input.',
+      'retry — Retries approx. 5 times.',
+      'test — Runs tests, i.e. the unit suite.',
+    ],
+  );
+});
+
+test('the first sentence of a long description with many abbreviation-like "." takes linear time', () => {
+  // A third-party SKILL.md scanned in the web view must not block the server: 1 MB, well under a second.
+  const description = 'a. '.repeat(350_000);
+  const started = performance.now();
+  assert.equal(firstSentence(description), description.trim());
+  assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)} ms`);
 });

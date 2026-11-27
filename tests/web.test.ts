@@ -407,6 +407,27 @@ test('the API streams an organization: the organization and its repositories, th
   }
 });
 
+test('the API and the page: the first sentence does not end at an abbreviation such as "e.g." or "i.e."', async () => {
+  const answer = await lines('Abbrev');
+  assert.deepEqual(
+    answer.lines[1].skills.map((skill: { name: string; summary: string }) => [skill.name, skill.summary]),
+    [
+      ['fmt', 'Formats files, e.g. JSON and YAML, before a commit.'],
+      ['test', 'Runs tests, i.e. the unit suite.'],
+    ],
+  );
+  const page = await openPage();
+  try {
+    await page.scan('Abbrev');
+    assert.deepEqual(
+      [...page.document.querySelectorAll('.skill .summary')].map((node) => node.textContent),
+      ['Formats files, e.g. JSON and YAML, before a commit.', 'Runs tests, i.e. the unit suite.'],
+    );
+  } finally {
+    page.close();
+  }
+});
+
 test('the API: an unreachable organization → the clear message, status 502; a rate limit stops the stream with `{ error }`', async () => {
   assert.deepEqual(await api('nobody'), { status: 502, body: { error: 'Organization not found: https://github.com/nobody' } });
   const limited = await lines('Limited');

@@ -8,7 +8,7 @@ JetBrains/kotlin · 6 skills
 build-tools-bump-gradle-api — Bumps the Gradle API…
   https://github.com/JetBrains/kotlin/blob/<commit>/…
 ```
-- Sorted by **name**; the description's *first sentence*
+- Sorted by **name**; the description's *first sentence*, as spec/analysis.md, "Details", says
 - `also in <paths>` for copies; warnings go to *stderr*
 - A rate limit waited out (spec/analysis.md, "Rate limit"): `warning: GitHub rate limit reached; waiting N s` on stderr
 - No project skills → `<repo> · 0 skills`, exit code 0: not an error

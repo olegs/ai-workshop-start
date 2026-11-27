@@ -3,6 +3,8 @@
 Meaningful changes, newest first; how to log one: [.agents/skills/changes/SKILL.md](.agents/skills/changes/SKILL.md).
 
 ## 2026-11-27
+- The CLI and the web view no longer cut a description's first sentence at an abbreviation such as `e.g.` or `i.e.`
+  (#34).
 - A skill, [.agents/skills/status-update/SKILL.md](.agents/skills/status-update/SKILL.md), posts a weekly status update in Slack: a summary
   of the last 7 days from this change log, and a table of the issues closed and the Pull Requests merged.
 - The red agent posts a status update in Slack after every hunt, even when it finds no bug or every bug is already
